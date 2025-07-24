@@ -8,6 +8,19 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// This helper type replaces complex nested types with `Json` to prevent
+// TypeScript from entering an infinite loop during type resolution.
+type DocketDbRow = Omit<Docket, 'client' | 'passengers' | 'itinerary' | 'files' | 'comments' | 'payments' | 'invoices'> & {
+    client: Json;
+    passengers: Json;
+    itinerary: Json;
+    files: Json;
+    comments: Json;
+    payments: Json;
+    invoices: Json;
+};
+
+
 export interface Database {
   public: {
     Tables: {
@@ -36,9 +49,9 @@ export interface Database {
         Update: Partial<DocketDeletionLog>;
       };
       dockets: {
-        Row: Docket;
-        Insert: Partial<Docket>;
-        Update: Partial<Docket>;
+        Row: DocketDbRow;
+        Insert: Partial<DocketDbRow>;
+        Update: Partial<DocketDbRow>;
       };
       profiles: {
         Row: {
@@ -55,7 +68,7 @@ export interface Database {
         };
         Update: Partial<{
           id: string;
-          role?: "admin" | "user";
+          role: "admin" | "user";
           name: string;
           email: string | null;
         }>;

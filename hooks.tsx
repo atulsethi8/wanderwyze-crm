@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent } from './types';
 import { supabase, supabaseService } from './services';
 import { DEFAULT_COMPANY_SETTINGS } from './constants';
+import { Json } from './database.types';
 
 // --- Auth Hook ---
 interface AuthContextType {
@@ -100,7 +100,7 @@ export const useDockets = () => {
                 ]);
 
                 if (docketsRes.error) throw docketsRes.error;
-                if (docketsRes.data) setDockets(docketsRes.data);
+                if (docketsRes.data) setDockets(docketsRes.data as unknown as Docket[]);
 
                 if (suppliersRes.error) throw suppliersRes.error;
                 if(suppliersRes.data) setSuppliers(suppliersRes.data);
@@ -163,7 +163,7 @@ export const useDockets = () => {
             docketToSave = { ...docketData, id: `DOCKET-${Date.now()}`, createdBy: currentUser.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), searchTags: createSearchTags(docketData) };
         }
         
-        const { data, error } = await supabase.from('dockets').upsert(docketToSave).select().single();
+        const { data, error } = await supabase.from('dockets').upsert(docketToSave as any).select().single();
         
         if (error) throw error;
 
@@ -171,10 +171,10 @@ export const useDockets = () => {
             const index = prev.findIndex(d => d.id === data.id);
             if (index > -1) {
                 const newDockets = [...prev];
-                newDockets[index] = data;
+                newDockets[index] = data as unknown as Docket;
                 return newDockets;
             }
-            return [data, ...prev];
+            return [data as unknown as Docket, ...prev];
         });
         return data.id;
     } catch (error: any) {
@@ -252,7 +252,7 @@ export const useCompanySettings = () => {
                 // If no settings exist, insert the default ones
                 const { error: insertError } = await supabase
                     .from('company_settings')
-                    .insert({ id: 1, settings: DEFAULT_COMPANY_SETTINGS });
+                    .insert({ id: 1, settings: DEFAULT_COMPANY_SETTINGS as Json });
                 if(insertError) console.error("Could not insert default company settings:", insertError);
             } else if (error) {
                 console.error("Error fetching company settings:", error);
@@ -265,7 +265,7 @@ export const useCompanySettings = () => {
         const updatedSettings = { ...settings, ...newSettings };
         const { error } = await supabase
             .from('company_settings')
-            .upsert({ id: 1, settings: updatedSettings });
+            .upsert({ id: 1, settings: updatedSettings as Json });
         
         if (error) {
             console.error("Error saving company settings:", error);
