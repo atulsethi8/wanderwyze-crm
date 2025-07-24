@@ -1,0 +1,6 @@
+{
+  "name": "WanderWyze Docket",
+  "description": "A comprehensive Customer Relationship Management (CRM) application for travel agencies to manage client bookings (dockets). It features robust data management, financial tracking, AI-powered assistance, and user authentication.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
