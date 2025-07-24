@@ -1,4 +1,4 @@
-import { Agent, Docket, DocketDeletionLog, Supplier } from "./types";
+import { Agent, DocketDeletionLog, Supplier } from "./types";
 
 export type Json =
   | string
@@ -7,19 +7,6 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[];
-
-// This helper type replaces complex nested types with `Json` to prevent
-// TypeScript from entering an infinite loop during type resolution.
-type DocketDbRow = Omit<Docket, 'client' | 'passengers' | 'itinerary' | 'files' | 'comments' | 'payments' | 'invoices'> & {
-    client: Json;
-    passengers: Json;
-    itinerary: Json;
-    files: Json;
-    comments: Json;
-    payments: Json;
-    invoices: Json;
-};
-
 
 export interface Database {
   public: {
@@ -49,9 +36,57 @@ export interface Database {
         Update: Partial<DocketDeletionLog>;
       };
       dockets: {
-        Row: DocketDbRow;
-        Insert: Partial<DocketDbRow>;
-        Update: Partial<DocketDbRow>;
+        Row: {
+            id: string;
+            client: Json;
+            status: string;
+            tag: string;
+            agentId: string | null;
+            passengers: Json;
+            itinerary: Json;
+            files: Json;
+            comments: Json;
+            payments: Json;
+            invoices: Json;
+            searchTags: string[];
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+        Insert: Partial<{
+            id: string;
+            client: Json;
+            status: string;
+            tag: string;
+            agentId: string | null;
+            passengers: Json;
+            itinerary: Json;
+            files: Json;
+            comments: Json;
+            payments: Json;
+            invoices: Json;
+            searchTags: string[];
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        Update: Partial<{
+            id: string;
+            client: Json;
+            status: string;
+            tag: string;
+            agentId: string | null;
+            passengers: Json;
+            itinerary: Json;
+            files: Json;
+            comments: Json;
+            payments: Json;
+            invoices: Json;
+            searchTags: string[];
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        }>;
       };
       profiles: {
         Row: {

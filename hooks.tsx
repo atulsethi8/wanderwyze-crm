@@ -252,7 +252,7 @@ export const useCompanySettings = () => {
                 // If no settings exist, insert the default ones
                 const { error: insertError } = await supabase
                     .from('company_settings')
-                    .insert({ id: 1, settings: DEFAULT_COMPANY_SETTINGS as Json });
+                    .insert({ id: 1, settings: DEFAULT_COMPANY_SETTINGS as unknown as Json });
                 if(insertError) console.error("Could not insert default company settings:", insertError);
             } else if (error) {
                 console.error("Error fetching company settings:", error);
@@ -265,7 +265,7 @@ export const useCompanySettings = () => {
         const updatedSettings = { ...settings, ...newSettings };
         const { error } = await supabase
             .from('company_settings')
-            .upsert({ id: 1, settings: updatedSettings as Json });
+            .upsert({ id: 1, settings: updatedSettings as unknown as Json });
         
         if (error) {
             console.error("Error saving company settings:", error);

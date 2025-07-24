@@ -1,21 +1,13 @@
-
 import { createClient, User } from "@supabase/supabase-js";
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AuthUser, Flight, Hotel, Passenger } from "./types";
 import { Database } from './database.types';
 
 // --- SUPABASE CLIENT SETUP ---
-// Switched from hardcoded keys to environment variables for production security.
-// These variables will be set in your Netlify deployment settings.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMsg = "Supabase URL and/or Anon Key are missing. Please provide them in your environment variables (e.g., in a .env file or your hosting provider's settings).";
-  // In a deployed environment, we might just log this. In the UI, it's better to stop and show an error.
-  alert(errorMsg);
-  throw new Error(errorMsg);
-}
+// IMPORTANT: Replace these placeholder values with your actual Supabase URL and Anon Key.
+// You can get these from your Supabase project's "Project Settings" > "API" section.
+const supabaseUrl = "https://htoipoewypnertovrzbi.supabase.co"; // <--- REPLACE THIS STRING
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4"; // <--- REPLACE THIS STRING
 
 // The createClient function now uses the Database schema for full type safety.
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
