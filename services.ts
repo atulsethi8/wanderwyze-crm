@@ -9,6 +9,13 @@ import { Database } from './database.types';
 const supabaseUrl = "https://htoipoewypnertovrzbi.supabase.co"; // <--- REPLACE THIS STRING
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4"; // <--- REPLACE THIS STRING
 
+if (supabaseUrl === "YOUR_SUPABASE_URL" || supabaseAnonKey === "YOUR_SUPABASE_ANON_KEY") {
+  const errorMsg = "Supabase URL and/or Anon Key are missing. Please open services.ts and replace the placeholder values with your actual credentials.";
+  // This check is a critical guide for this development environment.
+  alert(errorMsg);
+  throw new Error(errorMsg);
+}
+
 // The createClient function now uses the Database schema for full type safety.
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
