@@ -106,12 +106,35 @@ export const supabaseService = {
 
 
 // --- GEMINI SERVICE ---
-const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+let ai: GoogleGenAI | null = null;
+
+const initializeAi = (): GoogleGenAI | null => {
+    // The API key is sourced from the `process.env.API_KEY` environment variable.
+    // This variable must be set in your deployment environment (e.g., Netlify, Vercel, or a local .env file).
+    const apiKey = process.env.API_KEY;
+
+    if (!apiKey) {
+        // This message will appear in the console if the API_KEY environment variable is not set.
+        console.error("Gemini API Key is missing. Please set the API_KEY environment variable. AI features will be disabled.");
+        return null;
+    }
+    
+    // Initialize the AI service only once.
+    if (!ai) {
+        ai = new GoogleGenAI({apiKey: apiKey});
+    }
+    return ai;
+};
+
 
 export const geminiService = {
   getItinerarySuggestions: async (destination: string, duration: number, interests: string) => {
+    const aiInstance = initializeAi();
+    if (!aiInstance) {
+        throw new Error("Gemini AI service is not available. Please ensure the API_KEY environment variable is configured in your deployment environment.");
+    }
     const prompt = `Provide itinerary suggestions for a ${duration}-day trip to ${destination} with interests in ${interests}. Return a JSON object.`;
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
@@ -140,10 +163,14 @@ export const geminiService = {
   },
 
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
+      const aiInstance = initializeAi();
+      if (!aiInstance) {
+        throw new Error("Gemini AI service is not available. Please ensure the API_KEY environment variable is configured in your deployment environment.");
+      }
       const documentPart = { inlineData: { data: fileContent, mimeType } };
       const textPart = { text: promptText };
 
-      const response = await ai.models.generateContent({
+      const response = await aiInstance.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [textPart, documentPart] },
         config: {

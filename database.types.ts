@@ -1,17 +1,10 @@
-
 import {
     Agent,
     DocketDeletionLog,
     Supplier
 } from "./types";
 
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+export type Json = any;
 
 // New type for the dockets table row to avoid deep type instantiation errors.
 // It uses `Json` for columns that are likely `jsonb` in the database.
@@ -62,9 +55,10 @@ export interface Database {
       };
       dockets: {
         Row: DocketRow;
-        // The data being inserted/updated is of type `Docket` from the app, which is compatible with `Json` after stringification.
-        // We define Insert and Update as `Partial<DocketRow>` to match the `Row` definition.
-        Insert: Partial<DocketRow>;
+        // Using DocketRow, which is simplified with Json properties, for Insert and Update
+        // to prevent "type instantiation excessively deep" errors that occur with the full Docket type,
+        // while still providing better type safety than just `Json`.
+        Insert: DocketRow;
         Update: Partial<DocketRow>;
       };
       profiles: {
