@@ -1,9 +1,10 @@
 
+
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent } from './types';
 import { supabase, supabaseService } from './services';
 import { DEFAULT_COMPANY_SETTINGS } from './constants';
-import { Json } from './database.types';
+import { Database } from './database.types';
 
 // --- Data Mapping Helpers ---
 // These functions translate between the app's camelCase object properties and the database's snake_case column names.
@@ -42,6 +43,24 @@ const mapAppDocketToDbDocket = (appDocket: Partial<Docket>): any => {
     if (createdAt !== undefined) dbObject.created_at = createdAt;
     if (updatedAt !== undefined) dbObject.updated_at = updatedAt;
     return dbObject;
+};
+
+/**
+ * Maps a supplier object from the database (snake_case) to the application's format (camelCase).
+ */
+const mapDbSupplierToAppSupplier = (dbSupplier: any): Supplier => {
+    if (!dbSupplier) return dbSupplier;
+    const { contact_person, contact_number, ...rest } = dbSupplier;
+    return { ...rest, contactPerson: contact_person, contactNumber: contact_number };
+};
+
+/**
+ * Maps a agent object from the database (snake_case) to the application's format (camelCase).
+ */
+const mapDbAgentToAppAgent = (dbAgent: any): Agent => {
+    if (!dbAgent) return dbAgent;
+    const { contact_info, ...rest } = dbAgent;
+    return { ...rest, contactInfo: contact_info };
 };
 
 
@@ -151,16 +170,26 @@ export const useDockets = () => {
                 }
 
                 if (suppliersRes.error) throw suppliersRes.error;
-                if(suppliersRes.data) setSuppliers(suppliersRes.data);
+                if(suppliersRes.data) setSuppliers(suppliersRes.data.map(mapDbSupplierToAppSupplier));
 
                 if (agentsRes.error) throw agentsRes.error;
-                if(agentsRes.data) setAgents(agentsRes.data);
+                if(agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
 
                 if (profilesRes.error) throw profilesRes.error;
                 if(profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
 
                 if (deletionLogRes.error) throw deletionLogRes.error;
-                if(deletionLogRes.data) setDeletionLog(deletionLogRes.data);
+                if(deletionLogRes.data) {
+                     const mappedLogs = deletionLogRes.data.map(log => ({
+                        id: log.id,
+                        docketId: log.docket_id,
+                        clientName: log.client_name,
+                        deletedBy: log.deleted_by,
+                        deletedAt: log.deleted_at,
+                        reason: log.reason
+                    }));
+                    setDeletionLog(mappedLogs);
+                }
 
             } catch (error: any) {
                 console.error("Error fetching data from Supabase:", error.message);
@@ -241,32 +270,59 @@ export const useDockets = () => {
     setLoading(true);
     const docketToDelete = dockets.find(d => d.id === id);
     if (docketToDelete && currentUser) {
-      const logEntry: Omit<DocketDeletionLog, 'id'> = { docketId: id, clientName: docketToDelete.client.name, deletedBy: currentUser.email || 'Unknown User', deletedAt: new Date().toISOString(), reason };
-      const { error: logError } = await supabase.from('deletion_log').insert(logEntry);
+      const logEntry = { 
+          docket_id: id, 
+          client_name: docketToDelete.client.name, 
+          deleted_by: currentUser.email || 'Unknown User', 
+          deleted_at: new Date().toISOString(), 
+          reason 
+      };
+      const { error: logError } = await supabase.from('deletion_log').insert([logEntry]);
       if (logError) { setLoading(false); throw logError; }
       
       const { error: deleteError } = await supabase.from('dockets').delete().eq('id', id);
       if (deleteError) { setLoading(false); throw deleteError; }
 
       setDockets(prev => prev.filter(d => d.id !== id));
-      const newLogEntry = await supabase.from('deletion_log').select('*').eq('docketId', id).single();
-      if(newLogEntry.data) setDeletionLog(prev => [newLogEntry.data, ...prev]);
+      const newLogEntry = await supabase.from('deletion_log').select('*').eq('docket_id', id).single();
+      if(newLogEntry.data) {
+         const mappedLog = {
+            id: newLogEntry.data.id,
+            docketId: newLogEntry.data.docket_id,
+            clientName: newLogEntry.data.client_name,
+            deletedBy: newLogEntry.data.deleted_by,
+            deletedAt: newLogEntry.data.deleted_at,
+            reason: newLogEntry.data.reason
+          };
+          setDeletionLog(prev => [mappedLog, ...prev]);
+      }
     }
     setLoading(false);
   }, [dockets, currentUser]);
 
   const saveSupplier = useCallback(async (supplier: Omit<Supplier, 'id'>) => {
     const newSupplier = { ...supplier, id: `SUP-${Date.now()}` };
-    const { data, error } = await supabase.from('suppliers').insert(newSupplier).select().single();
+    const dbSupplier = {
+        id: newSupplier.id,
+        name: newSupplier.name,
+        contact_person: newSupplier.contactPerson,
+        contact_number: newSupplier.contactNumber,
+    };
+    const { data, error } = await supabase.from('suppliers').insert([dbSupplier]).select().single();
     if (error) throw error;
-    if(data) setSuppliers(prev => [...prev, data]);
+    if(data) setSuppliers(prev => [...prev, mapDbSupplierToAppSupplier(data)]);
   }, []);
 
   const saveAgent = useCallback(async (agent: Omit<Agent, 'id'>) => {
     const newAgent = { ...agent, id: `AGENT-${Date.now()}` };
-    const { data, error } = await supabase.from('agents').insert(newAgent).select().single();
+    const dbAgent = {
+        id: newAgent.id,
+        name: newAgent.name,
+        contact_info: newAgent.contactInfo,
+    };
+    const { data, error } = await supabase.from('agents').insert([dbAgent]).select().single();
     if (error) throw error;
-    if(data) setAgents(prev => [...prev, data]);
+    if(data) setAgents(prev => [...prev, mapDbAgentToAppAgent(data)]);
   }, []);
 
   const updateUserRole = useCallback(async (userId: string, role: 'admin' | 'user') => {
@@ -304,7 +360,7 @@ export const useCompanySettings = () => {
                 // If no settings exist, insert the default ones
                 const { error: insertError } = await supabase
                     .from('company_settings')
-                    .insert({ id: 1, settings: DEFAULT_COMPANY_SETTINGS as unknown as Json });
+                    .insert([{ id: 1, settings: DEFAULT_COMPANY_SETTINGS }]);
                 if(insertError) console.error("Could not insert default company settings:", insertError);
             } else if (error) {
                 console.error("Error fetching company settings:", error);
@@ -317,7 +373,7 @@ export const useCompanySettings = () => {
         const updatedSettings = { ...settings, ...newSettings };
         const { error } = await supabase
             .from('company_settings')
-            .upsert({ id: 1, settings: updatedSettings as unknown as Json });
+            .upsert([{ id: 1, settings: updatedSettings }]);
         
         if (error) {
             console.error("Error saving company settings:", error);
