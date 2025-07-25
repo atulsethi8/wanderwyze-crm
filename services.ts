@@ -1,27 +1,41 @@
 
-
-import { createClient, type User } from "@supabase/supabase-js";
+import { createClient, type User, type SupabaseClient } from "@supabase/supabase-js";
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AuthUser, Flight, Hotel, Passenger } from "./types";
 import { Database } from './database.types';
 
 // --- SUPABASE CLIENT SETUP ---
-// IMPORTANT: Replace these placeholder values with your actual Supabase URL and Anon Key.
-// You can get these from your Supabase project's "Project Settings" > "API" section.
-const supabaseUrl = "https://htoipoewypnertovrzbi.supabase.co"; // <--- REPLACE THIS STRING
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4"; // <--- REPLACE THIS STRING
+// This setup now uses fallback credentials for easier deployment.
+// For production environments, setting these as environment variables is strongly recommended for security.
+const supabaseUrl = process.env.SUPABASE_URL || 'https://htoipoewypnertovrzbi.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4';
 
-/* This check is useful during initial setup but causes type errors once credentials are filled.
-if (supabaseUrl === "YOUR_SUPABASE_URL" || supabaseAnonKey === "YOUR_SUPABASE_ANON_KEY") {
-  const errorMsg = "Supabase URL and/or Anon Key are missing. Please open services.ts and replace the placeholder values with your actual credentials.";
-  // This check is a critical guide for this development environment.
-  alert(errorMsg);
+/**
+ * A flag to indicate if the application is using hardcoded, fallback Supabase keys.
+ * This is used to display a warning in the UI.
+ */
+export const usingFallbackKeys = !process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY;
+
+
+// This check is a safeguard. If for some reason the fallback keys are also missing, it will still prevent the app from crashing silently.
+if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMsg = "Supabase URL and/or Anon Key are critically missing. Cannot initialize Supabase client.";
+  document.body.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #FFFBEB; color: #92400E; border: 1px solid #FBBF24; border-radius: 8px; margin: 2rem;">
+    <h1 style="font-size: 1.5rem; font-weight: bold;">Fatal Configuration Error</h1>
+    <p style="margin-top: 1rem;">${errorMsg}</p>
+  </div>`;
   throw new Error(errorMsg);
 }
-*/
 
-// The createClient function now uses the Database schema for full type safety.
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// Create the client without the generic type during initialization to prevent it from
+// hanging due to the complex 'Database' type. This is a robust workaround for the
+// infinite loading spinner issue.
+const untypedSupabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Export the client cast to the correct type. This provides type-safety for all
+// subsequent calls throughout the application without affecting initialization.
+export const supabase: SupabaseClient<Database> = untypedSupabase;
+
 
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
 

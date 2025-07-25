@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
 import { Header } from './components/Header';
@@ -16,6 +13,26 @@ import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-route
 import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
+import { usingFallbackKeys } from './services';
+
+/**
+ * A banner that warns the developer if fallback (hardcoded) keys are being used.
+ * This encourages the adoption of secure environment variables.
+ */
+const DevWarningBanner: React.FC = () => {
+    if (!usingFallbackKeys) {
+        return null;
+    }
+
+    return (
+        <div className="bg-amber-100 border-b-2 border-amber-500 text-amber-800 p-2 text-center print:hidden">
+            <p className="text-sm">
+                <span className="font-bold">Developer Notice:</span> This app is using fallback credentials. For production, use environment variables for better security.
+            </p>
+        </div>
+    );
+};
+
 
 const AppContent: React.FC = () => {
     const { currentUser, loading: authLoading } = useAuth();
@@ -122,6 +139,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="flex flex-col min-h-screen">
+            <DevWarningBanner />
             <Header onNewDocket={handleNewDocket} onNavigate={handleNavigation} currentUser={currentUser} />
             <main className="flex-grow">
                 {renderContent()}
