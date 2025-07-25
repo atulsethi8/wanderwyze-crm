@@ -1,4 +1,6 @@
-import { createClient, User } from "@supabase/supabase-js";
+
+
+import { createClient, type User } from "@supabase/supabase-js";
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AuthUser, Flight, Hotel, Passenger } from "./types";
 import { Database } from './database.types';
@@ -9,16 +11,19 @@ import { Database } from './database.types';
 const supabaseUrl = "https://htoipoewypnertovrzbi.supabase.co"; // <--- REPLACE THIS STRING
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4"; // <--- REPLACE THIS STRING
 
+/* This check is useful during initial setup but causes type errors once credentials are filled.
 if (supabaseUrl === "YOUR_SUPABASE_URL" || supabaseAnonKey === "YOUR_SUPABASE_ANON_KEY") {
   const errorMsg = "Supabase URL and/or Anon Key are missing. Please open services.ts and replace the placeholder values with your actual credentials.";
   // This check is a critical guide for this development environment.
   alert(errorMsg);
   throw new Error(errorMsg);
 }
+*/
 
 // The createClient function now uses the Database schema for full type safety.
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
+const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
 
 // Helper to get full user profile with role
 const getUserProfile = async (user: User): Promise<AuthUser | null> => {
@@ -31,20 +36,32 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
 
         if (error && error.code !== 'PGRST116') { // PGRST1116 is "No rows found", which is okay right after signup
             console.error("Error fetching user profile:", error.message);
-            // Fallback for when a profile might not exist yet (e.g., right after signup)
-            return { id: user.id, name: user.email || 'New User', email: user.email, role: 'user' };
         }
 
+        const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
+
+        // If no profile exists, create a fallback.
+        // Special check: if this is a designated 'super admin' email, grant admin role.
         if (!profile) {
-            return { id: user.id, name: user.email || 'New User', email: user.email, role: 'user' };
+            const role = isSuperAdmin ? 'admin' : 'user';
+            return { id: user.id, name: user.email || 'New User', email: user.email, role };
+        }
+        
+        // If a profile exists, use its role.
+        // But as a failsafe, ensure the designated super admins always have admin rights.
+        let determinedRole = profile.role as 'admin' | 'user';
+        if (isSuperAdmin) {
+            determinedRole = 'admin';
         }
 
-        return { id: user.id, name: profile.name || user.email, email: user.email, role: profile.role as 'admin' | 'user' };
+        return { id: user.id, name: profile.name || user.email, email: user.email, role: determinedRole };
+
     } catch(e) {
         console.error("Exception fetching profile:", e);
         return null;
     }
 };
+
 
 // --- SUPABASE AUTH SERVICE (v2 Syntax) ---
 export const supabaseService = {

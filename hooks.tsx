@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent } from './types';
 import { supabase, supabaseService } from './services';
@@ -247,7 +248,7 @@ export const useCompanySettings = () => {
                 .single();
             
             if (data && data.settings) {
-                setSettings(data.settings as CompanySettings);
+                setSettings(data.settings as unknown as CompanySettings);
             } else if (error && error.code === 'PGRST116') { // 'PGRST116' means no rows returned
                 // If no settings exist, insert the default ones
                 const { error: insertError } = await supabase

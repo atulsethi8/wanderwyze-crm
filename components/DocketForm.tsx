@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent } from '../types';
 import { INITIAL_DOCKET_FORM_STATE, LEAD_SOURCES } from '../constants';
@@ -148,7 +149,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [newSupplier, setNewSupplier] = useState<Omit<Supplier, 'id'>>({ name: '', contactPerson: '', contactNumber: '' });
     const [addPaxToFlightIndex, setAddPaxToFlightIndex] = useState<number | null>(null);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-    const notificationTimer = React.useRef<NodeJS.Timeout | null>(null);
+    const notificationTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     
     const isReadOnly = useMemo(() => {
         if (!docket || !currentUser) return false; // New dockets are always editable

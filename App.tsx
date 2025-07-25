@@ -1,9 +1,11 @@
 
 
+
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
 import { Header } from './components/Header';
-import { DocketList } from './components/Dashboard';
+import { Dashboard } from './components/Dashboard';
 import { DocketForm } from './components/DocketForm';
 import { ReportsDashboard } from './components/ReportsDashboard';
 import { PaxCalendar } from './components/PaxCalendar';
@@ -87,7 +89,7 @@ const AppContent: React.FC = () => {
     const renderContent = () => {
         switch(currentView) {
             case 'dashboard':
-                return <DocketList dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
+                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
             case 'form':
                 return <DocketForm 
                     docket={selectedDocket} 
@@ -100,7 +102,7 @@ const AppContent: React.FC = () => {
                     loading={docketsLoading}
                 />;
             case 'reports':
-                return currentUser.role === 'admin' ? <ReportsDashboard dockets={dockets} agents={agents} /> : <ReportsDashboard dockets={dockets.filter(d => d.createdBy === currentUser.id)} agents={agents} />;
+                return <ReportsDashboard dockets={dockets} agents={agents} />;
             case 'settings':
                 return currentUser.role === 'admin' ? <CompanySettingsPage /> : <p>Access Denied</p>;
             case 'agents':
@@ -114,7 +116,7 @@ const AppContent: React.FC = () => {
             case 'deleted_log':
                  return currentUser.role === 'admin' ? <DeletedDocketsLog logs={deletionLog} /> : <p>Access Denied</p>;
             default:
-                return <DocketList dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
+                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
         }
     }
 

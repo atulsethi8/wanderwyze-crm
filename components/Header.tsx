@@ -43,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                         <nav className="hidden md:flex items-center space-x-4">
                             <button onClick={() => onNavigate('dashboard')} className="px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">Dashboard</button>
                             <button onClick={() => onNavigate('calendar')} className="px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">PAX Calendar</button>
+                            <button onClick={() => onNavigate('reports')} className="px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">Reports</button>
                             {currentUser?.role === 'admin' && (
                                 <div className="relative" ref={adminRef}>
                                     <button onClick={() => setAdminOpen(!adminOpen)} className="px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 flex items-center">
@@ -51,7 +52,6 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                                     {adminOpen && (
                                         <div className="origin-top-right absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
                                             <div className="py-1" role="menu" aria-orientation="vertical">
-                                                <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('reports'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Reports</a>
                                                 <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('users'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">User Management</a>
                                                 <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('agents'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Agents</a>
                                                 <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('settings'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Company Settings</a>

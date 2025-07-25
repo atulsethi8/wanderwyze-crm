@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Docket, BookingStatus, Agent } from '../types';
 import { STATUS_COLORS } from '../constants';
@@ -207,13 +208,13 @@ const OutstandingBalances: React.FC<{ dockets: Docket[]; onSelectDocket: (id: st
 };
 
 
-interface DocketListProps {
+interface DashboardProps {
   dockets: Docket[];
   agents: Agent[];
   onSelectDocket: (id: string) => void;
 }
 
-export const DocketList: React.FC<DocketListProps> = ({ dockets, agents, onSelectDocket }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ dockets, agents, onSelectDocket }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredDockets = useMemo(() => {

@@ -1,4 +1,9 @@
-import { Agent, DocketDeletionLog, Supplier } from "./types";
+
+import {
+    Agent,
+    DocketDeletionLog,
+    Supplier
+} from "./types";
 
 export type Json =
   | string
@@ -7,6 +12,26 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[];
+
+// New type for the dockets table row to avoid deep type instantiation errors.
+// It uses `Json` for columns that are likely `jsonb` in the database.
+export type DocketRow = {
+    id: string;
+    client: Json;
+    status: string;
+    tag: string;
+    agentId: string | null;
+    passengers: Json;
+    itinerary: Json;
+    files: Json;
+    comments: Json;
+    payments: Json;
+    invoices: Json;
+    searchTags: string[];
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
 
 export interface Database {
   public: {
@@ -36,57 +61,11 @@ export interface Database {
         Update: Partial<DocketDeletionLog>;
       };
       dockets: {
-        Row: {
-            id: string;
-            client: Json;
-            status: string;
-            tag: string;
-            agentId: string | null;
-            passengers: Json;
-            itinerary: Json;
-            files: Json;
-            comments: Json;
-            payments: Json;
-            invoices: Json;
-            searchTags: string[];
-            createdBy: string;
-            createdAt: string;
-            updatedAt: string;
-        };
-        Insert: Partial<{
-            id: string;
-            client: Json;
-            status: string;
-            tag: string;
-            agentId: string | null;
-            passengers: Json;
-            itinerary: Json;
-            files: Json;
-            comments: Json;
-            payments: Json;
-            invoices: Json;
-            searchTags: string[];
-            createdBy: string;
-            createdAt: string;
-            updatedAt: string;
-        }>;
-        Update: Partial<{
-            id: string;
-            client: Json;
-            status: string;
-            tag: string;
-            agentId: string | null;
-            passengers: Json;
-            itinerary: Json;
-            files: Json;
-            comments: Json;
-            payments: Json;
-            invoices: Json;
-            searchTags: string[];
-            createdBy: string;
-            createdAt: string;
-            updatedAt: string;
-        }>;
+        Row: DocketRow;
+        // The data being inserted/updated is of type `Docket` from the app, which is compatible with `Json` after stringification.
+        // We define Insert and Update as `Partial<DocketRow>` to match the `Row` definition.
+        Insert: Partial<DocketRow>;
+        Update: Partial<DocketRow>;
       };
       profiles: {
         Row: {
@@ -102,7 +81,6 @@ export interface Database {
           email?: string | null;
         };
         Update: Partial<{
-          id: string;
           role: "admin" | "user";
           name: string;
           email: string | null;
