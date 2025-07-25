@@ -27,14 +27,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(errorMsg);
 }
 
-// Create the client without the generic type during initialization to prevent it from
-// hanging due to the complex 'Database' type. This is a robust workaround for the
-// infinite loading spinner issue.
-const untypedSupabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Export the client cast to the correct type. This provides type-safety for all
-// subsequent calls throughout the application without affecting initialization.
-export const supabase: SupabaseClient<Database> = untypedSupabase;
+// Initialize the Supabase client directly with the generated types.
+// The previous workaround for a "hanging" issue is removed as modern tooling might handle this better.
+// If performance issues arise during development, the workaround might need to be revisited.
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];

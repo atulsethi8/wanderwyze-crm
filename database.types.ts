@@ -1,174 +1,176 @@
-// This file is simplified to use `any` for JSONB columns. This is a workaround
-// for a known issue where complex recursive types (like a fully-typed Json object)
-// can cause the TypeScript compiler to hang when used with the Supabase client,
-// leading to an infinite loading spinner on app start. Using `any` resolves this
-// performance bottleneck.
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export interface Database {
   public: {
     Tables: {
       agents: {
         Row: {
-          id: string;
-          name: string;
-          contact_info: string;
-        };
+          contact_info: string
+          id: string
+          name: string
+        }
         Insert: {
-          id: string;
-          name: string;
-          contact_info: string;
-        };
+          contact_info: string
+          id: string
+          name: string
+        }
         Update: {
-          id?: string;
-          name?: string;
-          contact_info?: string;
-        };
-      };
+          contact_info?: string
+          id?: string
+          name?: string
+        }
+      }
       company_settings: {
         Row: {
-          id: number;
-          settings: any; // Changed from Json to any
-        };
+          id: number
+          settings: Json
+        }
         Insert: {
-          id: number;
-          settings: any; // Changed from Json to any
-        };
+          id: number
+          settings: Json
+        }
         Update: {
-          id?: number;
-          settings?: any; // Changed from Json to any
-        };
-      };
+          id?: number
+          settings?: Json
+        }
+      }
       deletion_log: {
         Row: {
-          id: number;
-          docket_id: string;
-          client_name: string;
-          deleted_by: string;
-          deleted_at: string;
-          reason: string;
-        };
+          client_name: string
+          deleted_at: string
+          deleted_by: string
+          docket_id: string
+          id: number
+          reason: string
+        }
         Insert: {
-          id?: number; // DB should auto-increment
-          docket_id: string;
-          client_name: string;
-          deleted_by: string;
-          deleted_at: string;
-          reason: string;
-        };
+          client_name: string
+          deleted_at: string
+          deleted_by: string
+          docket_id: string
+          id?: number
+          reason: string
+        }
         Update: {
-          id?: number;
-          docket_id?: string;
-          client_name?: string;
-          deleted_by?: string;
-          deleted_at?: string;
-          reason?: string;
-        };
-      };
+          client_name?: string
+          deleted_at?: string
+          deleted_by?: string
+          docket_id?: string
+          id?: number
+          reason?: string
+        }
+      }
       dockets: {
         Row: {
-            id: string;
-            client: any; // Changed from Json to any
-            status: string;
-            tag: string;
-            agent_id: string | null;
-            passengers: any; // Changed from Json to any
-            itinerary: any; // Changed from Json to any
-            files: any; // Changed from Json to any
-            comments: any; // Changed from Json to any
-            payments: any; // Changed from Json to any
-            invoices: any; // Changed from Json to any
-            search_tags: string[];
-            created_by: string;
-            created_at: string;
-            updated_at: string;
-        };
+          agent_id: string | null
+          client: Json
+          comments: Json
+          created_at: string
+          created_by: string
+          files: Json
+          id: string
+          invoices: Json
+          itinerary: Json
+          passengers: Json
+          payments: Json
+          search_tags: string[]
+          status: string
+          tag: string
+          updated_at: string
+        }
         Insert: {
-            id: string;
-            client: any; // Changed from Json to any
-            status: string;
-            tag: string;
-            agent_id: string | null;
-            passengers: any; // Changed from Json to any
-            itinerary: any; // Changed from Json to any
-            files: any; // Changed from Json to any
-            comments: any; // Changed from Json to any
-            payments: any; // Changed from Json to any
-            invoices: any; // Changed from Json to any
-            search_tags: string[];
-            created_by: string;
-            created_at: string;
-            updated_at: string;
-        };
+          agent_id: string | null
+          client: Json
+          comments: Json
+          created_at: string
+          created_by: string
+          files: Json
+          id: string
+          invoices: Json
+          itinerary: Json
+          passengers: Json
+          payments: Json
+          search_tags: string[]
+          status: string
+          tag: string
+          updated_at: string
+        }
         Update: {
-            id?: string;
-            client?: any; // Changed from Json to any
-            status?: string;
-            tag?: string;
-            agent_id?: string | null;
-            passengers?: any; // Changed from Json to any
-            itinerary?: any; // Changed from Json to any
-            files?: any; // Changed from Json to any
-            comments?: any; // Changed from Json to any
-            payments?: any; // Changed from Json to any
-            invoices?: any; // Changed from Json to any
-            search_tags?: string[];
-            created_by?: string;
-            created_at?: string;
-            updated_at?: string;
-        };
-      };
+          agent_id?: string | null
+          client?: Json
+          comments?: Json
+          created_at?: string
+          created_by?: string
+          files?: Json
+          id?: string
+          invoices?: Json
+          itinerary?: Json
+          passengers?: Json
+          payments?: Json
+          search_tags?: string[]
+          status?: string
+          tag?: string
+          updated_at?: string
+        }
+      }
       profiles: {
         Row: {
-            id: string;
-            role: string;
-            name: string;
-            email: string | null;
-        };
+          email: string | null
+          id: string
+          name: string
+          role: string
+        }
         Insert: {
-            id: string;
-            role?: string;
-            name?: string;
-            email?: string | null;
-        };
+          email?: string | null
+          id: string
+          name: string
+          role: string
+        }
         Update: {
-            id?: string;
-            role?: string;
-            name?: string;
-            email?: string | null;
-        };
-      };
+          email?: string | null
+          id?: string
+          name?: string
+          role?: string
+        }
+      }
       suppliers: {
         Row: {
-          id: string;
-          name: string;
-          contact_person: string;
-          contact_number: string;
-        };
+          contact_number: string
+          contact_person: string
+          id: string
+          name: string
+        }
         Insert: {
-          id: string;
-          name: string;
-          contact_person: string;
-          contact_number: string;
-        };
+          contact_number: string
+          contact_person: string
+          id: string
+          name: string
+        }
         Update: {
-          id?: string;
-          name?: string;
-          contact_person?: string;
-          contact_number?: string;
-        };
-      };
-    };
+          contact_number?: string
+          contact_person?: string
+          id?: string
+          name?: string
+        }
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Enums: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
+      [_ in never]: never
+    }
+  }
 }
