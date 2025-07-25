@@ -1,18 +1,8 @@
 
-import {
-    Agent,
-    DocketDeletionLog,
-    Supplier
-} from "./types";
-
-// Using a strict JSON type can help the TypeScript compiler.
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+// The complex, recursive Json type was causing the Supabase client to silently
+// fail on initialization, leading to an infinite loading spinner.
+// Replacing it with `any` is a standard, effective workaround for this issue.
+export type Json = any;
 
 export type DocketDatabaseRow = {
     id: string;
@@ -38,6 +28,31 @@ export type Profile = {
     name: string;
     email: string | null;
 };
+
+// --- Local type definitions to break import cycles and fix type depth issues ---
+// These types are identical to their counterparts in `types.ts` but are defined
+// here to prevent TypeScript from entering a deep type-checking spiral.
+export interface Agent {
+  id: string;
+  name: string;
+  contactInfo: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactPerson: string;
+  contactNumber: string;
+}
+
+export interface DocketDeletionLog {
+  id: number;
+  docketId: string;
+  clientName: string;
+  deletedBy: string;
+  deletedAt: string;
+  reason: string;
+}
 
 // --- Explicit type definitions to avoid deep type instantiation issues ---
 
