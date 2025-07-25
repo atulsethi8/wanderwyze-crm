@@ -5,6 +5,46 @@ import { supabase, supabaseService } from './services';
 import { DEFAULT_COMPANY_SETTINGS } from './constants';
 import { Json } from './database.types';
 
+// --- Data Mapping Helpers ---
+// These functions translate between the app's camelCase object properties and the database's snake_case column names.
+
+/**
+ * Maps a docket object from the database (snake_case) to the application's format (camelCase).
+ * @param dbDocket - The raw docket object from Supabase.
+ * @returns A docket object conforming to the app's `Docket` type.
+ */
+const mapDbDocketToAppDocket = (dbDocket: any): Docket => {
+    if (!dbDocket) return dbDocket;
+    const { agent_id, search_tags, created_by, created_at, updated_at, ...rest } = dbDocket;
+    return {
+        ...rest,
+        agentId: agent_id,
+        searchTags: search_tags,
+        createdBy: created_by,
+        createdAt: created_at,
+        updatedAt: updated_at
+    } as Docket;
+};
+
+/**
+ * Maps a docket object from the application (camelCase) to the database's format (snake_case).
+ * @param appDocket - The docket object from the application state.
+ * @returns A docket object with snake_case keys ready for Supabase.
+ */
+const mapAppDocketToDbDocket = (appDocket: Partial<Docket>): any => {
+    if (!appDocket) return appDocket;
+    const { agentId, searchTags, createdBy, createdAt, updatedAt, ...rest } = appDocket;
+    const dbObject: any = { ...rest };
+    // Check for undefined because null is a valid value for agentId
+    if (agentId !== undefined) dbObject.agent_id = agentId;
+    if (searchTags !== undefined) dbObject.search_tags = searchTags;
+    if (createdBy !== undefined) dbObject.created_by = createdBy;
+    if (createdAt !== undefined) dbObject.created_at = createdAt;
+    if (updatedAt !== undefined) dbObject.updated_at = updatedAt;
+    return dbObject;
+};
+
+
 // --- Auth Hook ---
 interface AuthContextType {
   currentUser: AuthUser | null;
@@ -101,7 +141,10 @@ export const useDockets = () => {
                 ]);
 
                 if (docketsRes.error) throw docketsRes.error;
-                if (docketsRes.data) setDockets(docketsRes.data as unknown as Docket[]);
+                if (docketsRes.data) {
+                    const appDockets = docketsRes.data.map(mapDbDocketToAppDocket);
+                    setDockets(appDockets);
+                }
 
                 if (suppliersRes.error) throw suppliersRes.error;
                 if(suppliersRes.data) setSuppliers(suppliersRes.data);
@@ -164,20 +207,24 @@ export const useDockets = () => {
             docketToSave = { ...docketData, id: `DOCKET-${Date.now()}`, createdBy: currentUser.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), searchTags: createSearchTags(docketData) };
         }
         
-        const { data, error } = await supabase.from('dockets').upsert(docketToSave as any).select().single();
+        const dbObject = mapAppDocketToDbDocket(docketToSave);
+        
+        const { data, error } = await supabase.from('dockets').upsert(dbObject).select().single();
         
         if (error) throw error;
 
+        const returnedDocket = mapDbDocketToAppDocket(data);
+
         setDockets(prev => {
-            const index = prev.findIndex(d => d.id === data.id);
+            const index = prev.findIndex(d => d.id === returnedDocket.id);
             if (index > -1) {
                 const newDockets = [...prev];
-                newDockets[index] = data as unknown as Docket;
+                newDockets[index] = returnedDocket;
                 return newDockets;
             }
-            return [data as unknown as Docket, ...prev];
+            return [returnedDocket, ...prev];
         });
-        return data.id;
+        return returnedDocket.id;
     } catch (error: any) {
         console.error("Error saving docket:", error.message);
         throw error;

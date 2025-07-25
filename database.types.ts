@@ -1,3 +1,4 @@
+
 import {
     Agent,
     DocketDeletionLog,
@@ -6,25 +7,31 @@ import {
 
 export type Json = any;
 
-// New type for the dockets table row to avoid deep type instantiation errors.
-// It uses `Json` for columns that are likely `jsonb` in the database.
-export type DocketRow = {
+export type DocketDatabaseRow = {
     id: string;
     client: Json;
     status: string;
     tag: string;
-    agentId: string | null;
+    agent_id: string | null;
     passengers: Json;
     itinerary: Json;
     files: Json;
     comments: Json;
     payments: Json;
     invoices: Json;
-    searchTags: string[];
-    createdBy: string;
-    createdAt: string;
-    updatedAt: string;
+    search_tags: string[];
+    created_by: string;
+    created_at: string;
+    updated_at: string;
 };
+
+export type Profile = {
+    id: string;
+    role: "admin" | "user";
+    name: string;
+    email: string | null;
+};
+
 
 export interface Database {
   public: {
@@ -50,35 +57,18 @@ export interface Database {
       };
       deletion_log: {
         Row: DocketDeletionLog;
-        Insert: Omit<DocketDeletionLog, "id">;
+        Insert: Omit<DocketDeletionLog, 'id'>;
         Update: Partial<DocketDeletionLog>;
       };
       dockets: {
-        Row: DocketRow;
-        // Using DocketRow, which is simplified with Json properties, for Insert and Update
-        // to prevent "type instantiation excessively deep" errors that occur with the full Docket type,
-        // while still providing better type safety than just `Json`.
-        Insert: DocketRow;
-        Update: Partial<DocketRow>;
+        Row: DocketDatabaseRow;
+        Insert: DocketDatabaseRow;
+        Update: Partial<DocketDatabaseRow>;
       };
       profiles: {
-        Row: {
-          id: string;
-          role: "admin" | "user";
-          name: string;
-          email: string | null;
-        };
-        Insert: {
-          id: string;
-          role?: "admin" | "user";
-          name?: string;
-          email?: string | null;
-        };
-        Update: Partial<{
-          role: "admin" | "user";
-          name: string;
-          email: string | null;
-        }>;
+        Row: Profile;
+        Insert: Profile;
+        Update: Partial<Profile>;
       };
       suppliers: {
         Row: Supplier;
