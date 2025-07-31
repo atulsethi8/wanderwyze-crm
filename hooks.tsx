@@ -81,22 +81,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[Auth] AuthProvider mounted. Setting up auth listener.');
-    // This listener is the single source of truth for the user's auth state.
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        console.log('[Auth] onAuthStateChange listener fired with event:', _event, 'Session exists:', !!session);
-        if (session?.user) {
-            const profile = await supabaseService.getUserProfile(session.user);
-            setCurrentUser(profile);
-        } else {
+        try {
+            if (session?.user) {
+                const profile = await supabaseService.getUserProfile(session.user);
+                setCurrentUser(profile);
+            } else {
+                setCurrentUser(null);
+            }
+        } catch (error) {
+            console.error("Error in onAuthStateChange handler:", error);
             setCurrentUser(null);
+        } finally {
+            setLoading(false);
         }
-        console.log('[Auth] Setting auth loading to false.');
-        setLoading(false);
     });
 
     return () => {
-      console.log('[Auth] Unsubscribing from auth listener.');
       authListener?.subscription.unsubscribe();
     };
   }, []);
