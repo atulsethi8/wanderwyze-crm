@@ -27,7 +27,7 @@ const DevWarningBanner: React.FC = () => {
     return (
         <div className="bg-amber-100 border-b-2 border-amber-500 text-amber-800 p-2 text-center print:hidden">
             <p className="text-sm">
-                <span className="font-bold">Developer Notice:</span> This app is using fallback credentials. For production, use environment variables for better security.
+                <span className="font-bold">Developer Notice:</span> This app is using fallback credentials. If you have set environment variables in your hosting provider (e.g., Netlify) and still see this message, they are not being detected by the application.
             </p>
         </div>
     );

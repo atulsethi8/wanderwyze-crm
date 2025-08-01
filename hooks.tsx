@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const authListener = supabase.auth.onAuthStateChange(async (_event, session) => {
         try {
             if (session?.user) {
                 const profile = await supabaseService.getUserProfile(session.user);
@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      authListener?.unsubscribe();
     };
   }, []);
 

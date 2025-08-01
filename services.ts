@@ -1,5 +1,4 @@
-
-import { createClient, type User, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { AuthUser, Flight, Hotel, Passenger } from "./types";
 import { Database } from './database.types';
@@ -7,14 +6,14 @@ import { Database } from './database.types';
 // --- SUPABASE CLIENT SETUP ---
 // This setup now uses fallback credentials for easier deployment.
 // For production environments, setting these as environment variables is strongly recommended for security.
-const supabaseUrl = process.env.SUPABASE_URL || 'https://htoipoewypnertovrzbi.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4';
+const supabaseUrl = (typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined) || 'https://htoipoewypnertovrzbi.supabase.co';
+const supabaseAnonKey = (typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4';
 
 /**
  * A flag to indicate if the application is using hardcoded, fallback Supabase keys.
  * This is used to display a warning in the UI.
  */
-export const usingFallbackKeys = !process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY;
+export const usingFallbackKeys = !(typeof process !== 'undefined' && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 
 
 // This check is a safeguard. If for some reason the fallback keys are also missing, it will still prevent the app from crashing silently.
@@ -36,7 +35,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
 
 // Helper to get full user profile with role
-const getUserProfile = async (user: User): Promise<AuthUser | null> => {
+const getUserProfile = async (user: any): Promise<AuthUser | null> => {
     try {
         const { data: profile, error } = await supabase
             .from('profiles')
@@ -77,11 +76,11 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
 export const supabaseService = {
   async signInWithPassword(email: string, password?: string): Promise<{ user: AuthUser | null; error: string | null }> {
     if (!password) return { user: null, error: 'Password is required.' };
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { user, error } = await supabase.auth.signIn({ email, password });
     if (error) return { user: null, error: error.message };
-    if (!data.user) return { user: null, error: 'Login failed, no user returned.' };
+    if (!user) return { user: null, error: 'Login failed, no user returned.' };
     
-    const userProfile = await getUserProfile(data.user);
+    const userProfile = await getUserProfile(user);
     return { user: userProfile, error: null };
   },
 
@@ -91,8 +90,8 @@ export const supabaseService = {
   },
 
   async getSession(): Promise<{ user: AuthUser | null }> {
-     const { data: { session }, error } = await supabase.auth.getSession();
-     if (error || !session) {
+     const session = supabase.auth.session();
+     if (!session) {
          return { user: null };
      }
      const userProfile = await getUserProfile(session.user);
@@ -100,14 +99,14 @@ export const supabaseService = {
   },
   
   async sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.api.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/#/reset-password',
     });
     return { error: error ? error.message : null };
   },
 
   async updateUserPassword(password: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.update({ password });
     return { error: error ? error.message : null };
   },
 
@@ -121,7 +120,7 @@ let ai: GoogleGenAI | null = null;
 const initializeAi = (): GoogleGenAI | null => {
     // The API key is sourced from the `process.env.API_KEY` environment variable.
     // This variable must be set in your deployment environment (e.g., Netlify, Vercel, or a local .env file).
-    const apiKey = process.env.API_KEY;
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
 
     if (!apiKey) {
         // This message will appear in the console if the API_KEY environment variable is not set.
