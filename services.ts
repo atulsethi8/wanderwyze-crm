@@ -109,6 +109,7 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
 };
 
 
+// --- SUPABASE AUTH SERVICE (v2 Syntax) ---
 export const supabaseService = {
   async signInWithPassword(email: string, password?: string): Promise<{ user: AuthUser | null; error: string | null }> {
     if (!password) return { user: null, error: 'Password is required.' };
@@ -126,8 +127,8 @@ export const supabaseService = {
   },
 
   async getSession(): Promise<{ user: AuthUser | null }> {
-     const { data: { session } } = await supabase.auth.getSession();
-     if (!session) {
+     const { data: { session }, error } = await supabase.auth.getSession();
+     if (error || !session) {
          return { user: null };
      }
      const userProfile = await getUserProfile(session.user);
@@ -136,13 +137,13 @@ export const supabaseService = {
   
   async sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/#/reset-password',
+        redirectTo: `${window.location.origin}/#/reset-password`,
     });
     return { error: error ? error.message : null };
   },
 
   async updateUserPassword(password: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.updateUser({ password });
+    const { data, error } = await supabase.auth.updateUser({ password });
     return { error: error ? error.message : null };
   },
 

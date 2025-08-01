@@ -29,15 +29,15 @@ export interface Database {
       company_settings: {
         Row: {
           id: number
-          settings: Json
+          settings: any
         }
         Insert: {
           id: number
-          settings: Json
+          settings: any
         }
         Update: {
           id?: number
-          settings?: Json
+          settings?: any
         }
       }
       deletion_log: {
@@ -69,16 +69,16 @@ export interface Database {
       dockets: {
         Row: {
           agent_id: string | null
-          client: Json
-          comments: Json
+          client: any
+          comments: any
           created_at: string
           created_by: string
-          files: Json
+          files: any
           id: string
-          invoices: Json
-          itinerary: Json
-          passengers: Json
-          payments: Json
+          invoices: any
+          itinerary: any
+          passengers: any
+          payments: any
           search_tags: string[]
           status: string
           tag: string
@@ -86,16 +86,16 @@ export interface Database {
         }
         Insert: {
           agent_id: string | null
-          client: Json
-          comments: Json
+          client: any
+          comments: any
           created_at: string
           created_by: string
-          files: Json
+          files: any
           id: string
-          invoices: Json
-          itinerary: Json
-          passengers: Json
-          payments: Json
+          invoices: any
+          itinerary: any
+          passengers: any
+          payments: any
           search_tags: string[]
           status: string
           tag: string
@@ -103,16 +103,16 @@ export interface Database {
         }
         Update: {
           agent_id?: string | null
-          client?: Json
-          comments?: Json
+          client?: any
+          comments?: any
           created_at?: string
           created_by?: string
-          files?: Json
+          files?: any
           id?: string
-          invoices?: Json
-          itinerary?: Json
-          passengers?: Json
-          payments?: Json
+          invoices?: any
+          itinerary?: any
+          passengers?: any
+          payments?: any
           search_tags?: string[]
           status?: string
           tag?: string
