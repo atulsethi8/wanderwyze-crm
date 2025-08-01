@@ -1,5 +1,5 @@
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, User } from "@supabase/supabase-js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { AuthUser } from "./types";
 import { Database } from './database.types';
@@ -39,35 +39,62 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
 
-const getUserProfile = async (user: any): Promise<AuthUser | null> => {
+const getUserProfile = async (user: User): Promise<AuthUser | null> => {
     try {
+        // 1. Attempt to fetch the user's profile
         const { data: profile, error } = await supabase
             .from('profiles')
             .select('role, name, email')
             .eq('id', user.id)
             .single();
 
-        if (error && error.code !== 'PGRST116') {
-            console.error("Error fetching user profile:", error.message);
+        // If a profile exists, return it
+        if (profile) {
+            // Failsafe for super admins, ensuring their role is always 'admin'
+            const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
+            // The role from the DB is a string, so we ensure it's one of the accepted values.
+            const userRole = (profile.role === 'admin' || profile.role === 'user') ? profile.role : 'user';
+            const determinedRole = isSuperAdmin ? 'admin' : userRole;
+            return { id: user.id, name: profile.name || user.id, email: user.email ?? undefined, role: determinedRole };
         }
 
-        const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
-        
-        if (!profile) {
-            const role = isSuperAdmin ? 'admin' : 'user';
-            return { id: user.id, name: user.email || 'New User', email: user.email, role };
-        }
-        
-        let determinedRole = profile.role as 'admin' | 'user';
-        if (isSuperAdmin) {
-            determinedRole = 'admin';
+        // 2. If no profile exists (PGRST116: "No rows found"), create one
+        if (error && error.code === 'PGRST116') {
+            console.log('No profile found for user, creating one...');
+
+            const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
+            const newUserRole = isSuperAdmin ? 'admin' : 'user';
+
+            const newProfileData = {
+                id: user.id,
+                email: user.email ?? null,
+                name: user.email || user.id, // name is required and cannot be null
+                role: newUserRole,
+            };
+
+            // Insert the new profile into the 'profiles' table
+            const { error: insertError } = await supabase.from('profiles').insert(newProfileData);
+
+            if (insertError) {
+                console.error("Fatal error: Could not create user profile on-the-fly.", insertError);
+                throw insertError; // Throw error to stop the process
+            }
+
+            console.log('Profile created successfully.');
+            // Return the newly created profile data
+            return { id: user.id, name: newProfileData.name, email: newProfileData.email ?? undefined, role: newProfileData.role };
         }
 
-        return { id: user.id, name: profile.name || user.email, email: user.email, role: determinedRole };
+        // 3. If there was another type of error, throw it
+        if (error) {
+            throw error;
+        }
 
-    } catch(e) {
-        console.error("Exception fetching profile:", e);
-        return null;
+        return null; // Should not be reached, but acts as a fallback
+
+    } catch (e) {
+        console.error("Exception in getUserProfile:", e);
+        return null; // Return null on any unexpected exception
     }
 };
 
