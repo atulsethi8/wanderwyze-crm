@@ -1,24 +1,32 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import { AuthUser, Flight, Hotel, Passenger } from "./types";
+
+import { createClient } from "@supabase/supabase-js";
+import { GoogleGenAI, Type } from "@google/genai";
+import { AuthUser } from "./types";
 import { Database } from './database.types';
 
-// --- SUPABASE CLIENT SETUP ---
-// This setup now uses fallback credentials for easier deployment.
-// For production environments, setting these as environment variables is strongly recommended for security.
-const supabaseUrl = (typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined) || 'https://htoipoewypnertovrzbi.supabase.co';
-const supabaseAnonKey = (typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4';
+// --- IMPORTANT CONFIGURATION ---
+// This application runs directly in the browser without a build step, so it
+// CANNOT access environment variables from your hosting provider (like Netlify).
+// The advice to use `process.env` or `import.meta.env` applies to projects with
+// a build tool (like Vite or Webpack), which this project does not use.
+//
+// You MUST replace the placeholder values below with your actual API keys.
+const CONFIG = {
+  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- REPLACE WITH YOUR SUPABASE URL
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4", // <-- REPLACE WITH YOUR SUPABASE ANON KEY
+  API_KEY: null, // <-- REPLACE WITH YOUR GEMINI API KEY, e.g., "AIza..."
+};
 
-/**
- * A flag to indicate if the application is using hardcoded, fallback Supabase keys.
- * This is used to display a warning in the UI.
- */
-export const usingFallbackKeys = !(typeof process !== 'undefined' && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
+// This flag checks if you've replaced the default keys.
+// A warning banner will be shown in the app if you haven't.
+export const usingDefaultKeys = CONFIG.SUPABASE_URL === "https://htoipoewypnertovrzbi.supabase.co" || !CONFIG.API_KEY;
 
 
-// This check is a safeguard. If for some reason the fallback keys are also missing, it will still prevent the app from crashing silently.
+const supabaseUrl = CONFIG.SUPABASE_URL;
+const supabaseAnonKey = CONFIG.SUPABASE_ANON_KEY;
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMsg = "Supabase URL and/or Anon Key are critically missing. Cannot initialize Supabase client.";
+  const errorMsg = "Supabase URL and/or Anon Key are critically missing. Edit services.ts and fill in the CONFIG object.";
   document.body.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #FFFBEB; color: #92400E; border: 1px solid #FBBF24; border-radius: 8px; margin: 2rem;">
     <h1 style="font-size: 1.5rem; font-weight: bold;">Fatal Configuration Error</h1>
     <p style="margin-top: 1rem;">${errorMsg}</p>
@@ -26,15 +34,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(errorMsg);
 }
 
-// Initialize the Supabase client directly with the generated types.
-// The previous workaround for a "hanging" issue is removed as modern tooling might handle this better.
-// If performance issues arise during development, the workaround might need to be revisited.
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
 
-// Helper to get full user profile with role
 const getUserProfile = async (user: any): Promise<AuthUser | null> => {
     try {
         const { data: profile, error } = await supabase
@@ -43,21 +47,17 @@ const getUserProfile = async (user: any): Promise<AuthUser | null> => {
             .eq('id', user.id)
             .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST1116 is "No rows found", which is okay right after signup
+        if (error && error.code !== 'PGRST116') {
             console.error("Error fetching user profile:", error.message);
         }
 
         const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
-
-        // If no profile exists, create a fallback.
-        // Special check: if this is a designated 'super admin' email, grant admin role.
+        
         if (!profile) {
             const role = isSuperAdmin ? 'admin' : 'user';
             return { id: user.id, name: user.email || 'New User', email: user.email, role };
         }
         
-        // If a profile exists, use its role.
-        // But as a failsafe, ensure the designated super admins always have admin rights.
         let determinedRole = profile.role as 'admin' | 'user';
         if (isSuperAdmin) {
             determinedRole = 'admin';
@@ -72,15 +72,14 @@ const getUserProfile = async (user: any): Promise<AuthUser | null> => {
 };
 
 
-// --- SUPABASE AUTH SERVICE (v2 Syntax) ---
 export const supabaseService = {
   async signInWithPassword(email: string, password?: string): Promise<{ user: AuthUser | null; error: string | null }> {
     if (!password) return { user: null, error: 'Password is required.' };
-    const { user, error } = await supabase.auth.signIn({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { user: null, error: error.message };
-    if (!user) return { user: null, error: 'Login failed, no user returned.' };
+    if (!data.user) return { user: null, error: 'Login failed, no user returned.' };
     
-    const userProfile = await getUserProfile(user);
+    const userProfile = await getUserProfile(data.user);
     return { user: userProfile, error: null };
   },
 
@@ -90,7 +89,7 @@ export const supabaseService = {
   },
 
   async getSession(): Promise<{ user: AuthUser | null }> {
-     const session = supabase.auth.session();
+     const { data: { session } } = await supabase.auth.getSession();
      if (!session) {
          return { user: null };
      }
@@ -99,14 +98,14 @@ export const supabaseService = {
   },
   
   async sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.api.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/#/reset-password',
     });
     return { error: error ? error.message : null };
   },
 
   async updateUserPassword(password: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.auth.update({ password });
+    const { error } = await supabase.auth.updateUser({ password });
     return { error: error ? error.message : null };
   },
 
@@ -114,21 +113,16 @@ export const supabaseService = {
 };
 
 
-// --- GEMINI SERVICE ---
 let ai: GoogleGenAI | null = null;
 
 const initializeAi = (): GoogleGenAI | null => {
-    // The API key is sourced from the `process.env.API_KEY` environment variable.
-    // This variable must be set in your deployment environment (e.g., Netlify, Vercel, or a local .env file).
-    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+    const apiKey = CONFIG.API_KEY;
 
     if (!apiKey) {
-        // This message will appear in the console if the API_KEY environment variable is not set.
-        console.error("Gemini API Key is missing. Please set the API_KEY environment variable. AI features will be disabled.");
+        console.error("Gemini API Key is missing. Please set the API_KEY in the CONFIG object in services.ts. AI features will be disabled.");
         return null;
     }
     
-    // Initialize the AI service only once.
     if (!ai) {
         ai = new GoogleGenAI({apiKey: apiKey});
     }
@@ -140,7 +134,7 @@ export const geminiService = {
   getItinerarySuggestions: async (destination: string, duration: number, interests: string) => {
     const aiInstance = initializeAi();
     if (!aiInstance) {
-        throw new Error("Gemini AI service is not available. Please ensure the API_KEY environment variable is configured in your deployment environment.");
+        throw new Error("Gemini AI service is not available. Please ensure the API_KEY is configured in services.ts.");
     }
     const prompt = `Provide itinerary suggestions for a ${duration}-day trip to ${destination} with interests in ${interests}. Return a JSON object.`;
     const response = await aiInstance.models.generateContent({
@@ -174,7 +168,7 @@ export const geminiService = {
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
       const aiInstance = initializeAi();
       if (!aiInstance) {
-        throw new Error("Gemini AI service is not available. Please ensure the API_KEY environment variable is configured in your deployment environment.");
+        throw new Error("Gemini AI service is not available. Please ensure the API_KEY is configured in services.ts.");
       }
       const documentPart = { inlineData: { data: fileContent, mimeType } };
       const textPart = { text: promptText };
@@ -193,8 +187,6 @@ export const geminiService = {
 };
 
 
-// --- HELPER FUNCTIONS ---
-
 export const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -206,12 +198,8 @@ export const toBase64 = (file: File): Promise<string> =>
 export const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
     try {
-        // Handle YYYY-MM-DD strings by ensuring they are parsed as local time, not UTC.
-        // Appending T00:00:00 helps achieve this across browsers.
         const date = new Date(`${dateString}T00:00:00`);
-        // A simple check for invalid date objects
         if (isNaN(date.getTime())) return 'N/A';
-        // Use en-GB locale to get dd/mm/yyyy format
         return date.toLocaleDateString('en-GB');
     } catch(e) {
         return 'N/A';
@@ -270,7 +258,6 @@ export function amountToWords(amount: number) {
     const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
     const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
 
-    // Ensure amount is a number and handle potential issues
     const num = parseFloat(String(amount || 0)).toFixed(2).split('.');
     const whole = parseInt(num[0]);
     const decimal = parseInt(num[1]);

@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
 import { Header } from './components/Header';
@@ -9,25 +12,25 @@ import { PaxCalendar } from './components/PaxCalendar';
 import { LoginPage, PasswordResetPage, UserProfilePage } from './components/Auth';
 import { DeletedDocketsLog } from './components/DeletedDocketsLog';
 import { Spinner } from './components/common';
-import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
-import { usingFallbackKeys } from './services';
+import { usingDefaultKeys } from './services';
 
 /**
- * A banner that warns the developer if fallback (hardcoded) keys are being used.
- * This encourages the adoption of secure environment variables.
+ * A banner that warns the developer if the default API keys are being used.
  */
-const DevWarningBanner: React.FC = () => {
-    if (!usingFallbackKeys) {
+const ConfigWarningBanner: React.FC = () => {
+    if (!usingDefaultKeys) {
         return null;
     }
 
     return (
-        <div className="bg-amber-100 border-b-2 border-amber-500 text-amber-800 p-2 text-center print:hidden">
-            <p className="text-sm">
-                <span className="font-bold">Developer Notice:</span> This app is using fallback credentials. If you have set environment variables in your hosting provider (e.g., Netlify) and still see this message, they are not being detected by the application.
+        <div className="bg-red-100 border-b-2 border-red-500 text-red-800 p-3 text-center print:hidden">
+            <p className="font-bold text-lg">⚠️ Configuration Needed!</p>
+            <p className="mt-1">
+                This application is using default placeholder API keys.
+                You must edit the <code>services.ts</code> file and replace the placeholder values in the <code>CONFIG</code> object with your own keys from Supabase and Google AI.
             </p>
         </div>
     );
@@ -40,14 +43,23 @@ const AppContent: React.FC = () => {
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedDocketId, setSelectedDocketId] = useState<string | null>(null);
 
-    const navigate = useNavigate();
-    const location = useLocation();
-    
-    // This effect synchronizes the React state 'currentView' with the URL from HashRouter
+    const navigate = (path: string) => {
+        window.location.hash = path;
+    };
+
     React.useEffect(() => {
-        const path = location.pathname.substring(1) || 'dashboard';
-        setCurrentView(path);
-    }, [location]);
+        const handleHashChange = () => {
+            const path = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+            setCurrentView(path || 'dashboard');
+        };
+
+        window.addEventListener('hashchange', handleHashChange);
+        handleHashChange(); // Set initial view
+
+        return () => {
+            window.removeEventListener('hashchange', handleHashChange);
+        };
+    }, []);
 
     const handleNavigation = (view: string) => {
         setSelectedDocketId(null);
@@ -69,7 +81,8 @@ const AppContent: React.FC = () => {
             const savedId = await saveDocket(docketData, id);
             if(savedId) {
                 setSelectedDocketId(savedId);
-                navigate('/form'); // stay on form after save
+                // If we just created a new docket, we stay on the form page to continue editing.
+                // The URL is already correct from handleNewDocket.
             }
         } catch (error) {
             console.error("Error saving docket from App.tsx:", error);
@@ -96,8 +109,8 @@ const AppContent: React.FC = () => {
     }
 
     if (!currentUser) {
-        // Simple routing for auth pages
-        if (location.pathname.startsWith('/reset-password')) {
+        const hash = window.location.hash.replace(/^#\/?/, '');
+        if (hash.startsWith('reset-password')) {
             return <PasswordResetPage />;
         }
         return <LoginPage />;
@@ -139,7 +152,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="flex flex-col min-h-screen">
-            <DevWarningBanner />
+            <ConfigWarningBanner />
             <Header onNewDocket={handleNewDocket} onNavigate={handleNavigation} currentUser={currentUser} />
             <main className="flex-grow">
                 {renderContent()}
@@ -148,13 +161,10 @@ const AppContent: React.FC = () => {
     );
 };
 
-// Main App component wraps everything in providers
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <HashRouter>
-                 <AppContent />
-            </HashRouter>
+            <AppContent />
         </AuthProvider>
     );
 };
