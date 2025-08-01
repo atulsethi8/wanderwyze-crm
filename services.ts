@@ -12,9 +12,9 @@ import { Database } from './database.types';
 //
 // You MUST replace the placeholder values below with your actual API keys.
 const CONFIG = {
-  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- REPLACE WITH YOUR SUPABASE URL
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4", // <-- REPLACE WITH YOUR SUPABASE ANON KEY
-  API_KEY: null, // <-- REPLACE WITH YOUR GEMINI API KEY, e.g., "AIza..."
+  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- This is a placeholder
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4", // <-- This is a placeholder
+  API_KEY: "AIzaSyDdkzkHodaauz8A7M7QyxDa1kzuNz8Bzgk", // <-- This is a placeholder
 };
 
 // This flag checks if you've replaced the default keys.
@@ -52,9 +52,8 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
         if (profile) {
             // Failsafe for super admins, ensuring their role is always 'admin'
             const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
-            // The role from the DB is a string, so we ensure it's one of the accepted values.
-            const userRole = (profile.role === 'admin' || profile.role === 'user') ? profile.role : 'user';
-            const determinedRole = isSuperAdmin ? 'admin' : userRole;
+            // The role from the DB is now correctly typed, so we can use it directly.
+            const determinedRole = isSuperAdmin ? 'admin' : profile.role;
             return { id: user.id, name: profile.name || user.id, email: user.email ?? undefined, role: determinedRole };
         }
 

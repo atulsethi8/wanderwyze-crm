@@ -1,5 +1,13 @@
 
-export type Json = any;
+import { Client, Comment, UploadedFile, Invoice, Itinerary, Passenger, Payment } from "./types";
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export interface Database {
   public: {
@@ -64,16 +72,16 @@ export interface Database {
       dockets: {
         Row: {
           agent_id: string | null
-          client: Json
-          comments: Json
+          client: Client
+          comments: Comment[]
           created_at: string
           created_by: string
-          files: Json
+          files: UploadedFile[]
           id: string
-          invoices: Json
-          itinerary: Json
-          passengers: Json
-          payments: Json
+          invoices: Invoice[]
+          itinerary: Itinerary
+          passengers: Passenger[]
+          payments: Payment[]
           search_tags: string[]
           status: string
           tag: string
@@ -81,16 +89,16 @@ export interface Database {
         }
         Insert: {
           agent_id: string | null
-          client: Json
-          comments: Json
+          client: Client
+          comments: Comment[]
           created_at: string
           created_by: string
-          files: Json
+          files: UploadedFile[]
           id: string
-          invoices: Json
-          itinerary: Json
-          passengers: Json
-          payments: Json
+          invoices: Invoice[]
+          itinerary: Itinerary
+          passengers: Passenger[]
+          payments: Payment[]
           search_tags: string[]
           status: string
           tag: string
@@ -98,16 +106,16 @@ export interface Database {
         }
         Update: {
           agent_id?: string | null
-          client?: Json
-          comments?: Json
+          client?: Client
+          comments?: Comment[]
           created_at?: string
           created_by?: string
-          files?: Json
+          files?: UploadedFile[]
           id?: string
-          invoices?: Json
-          itinerary?: Json
-          passengers?: Json
-          payments?: Json
+          invoices?: Invoice[]
+          itinerary?: Itinerary
+          passengers?: Passenger[]
+          payments?: Payment[]
           search_tags?: string[]
           status?: string
           tag?: string
@@ -119,19 +127,19 @@ export interface Database {
           email: string | null
           id: string
           name: string
-          role: string
+          role: "admin" | "user"
         }
         Insert: {
           email?: string | null
           id: string
           name: string
-          role: string
+          role: "admin" | "user"
         }
         Update: {
           email?: string | null
           id?: string
           name?: string
-          role?: string
+          role?: "admin" | "user"
         }
       }
       suppliers: {
