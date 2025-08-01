@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
 import { Header } from './components/Header';
@@ -18,20 +15,40 @@ import { UserManagementPage } from './components/UserManagementPage';
 import { usingDefaultKeys } from './services';
 
 /**
- * A banner that warns the developer if the default API keys are being used.
+ * A full-screen overlay that blocks the app if API keys are not configured.
+ * This is a critical step and the app cannot function without it.
  */
-const ConfigWarningBanner: React.FC = () => {
-    if (!usingDefaultKeys) {
-        return null;
-    }
-
+const FatalConfigError: React.FC = () => {
     return (
-        <div className="bg-red-100 border-b-2 border-red-500 text-red-800 p-3 text-center print:hidden">
-            <p className="font-bold text-lg">⚠️ Configuration Needed!</p>
-            <p className="mt-1">
-                This application is using default placeholder API keys.
-                You must edit the <code>services.ts</code> file and replace the placeholder values in the <code>CONFIG</code> object with your own keys from Supabase and Google AI.
-            </p>
+        <div className="fixed inset-0 bg-slate-900 bg-opacity-95 z-50 flex justify-center items-center p-4 text-white">
+            <div className="max-w-3xl w-full bg-slate-800 rounded-lg shadow-2xl p-8 border border-red-500">
+                <div className="text-center">
+                    <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <h1 className="text-3xl font-bold text-red-400">Action Required: API Keys Not Set</h1>
+                    <p className="text-slate-300 mt-4 text-lg">
+                        This application cannot connect to the database or use AI features because it is still using default placeholder API keys.
+                    </p>
+                </div>
+
+                <div className="mt-8 bg-slate-900 p-6 rounded-lg">
+                    <p className="text-slate-200 text-md mb-4">You must open the following file in your code editor and replace the placeholder values:</p>
+                    <p className="font-mono text-lg text-amber-300 mb-2">File: <code>services.ts</code></p>
+                    <pre className="bg-black text-white p-4 rounded-md overflow-x-auto text-sm">
+                        <code>
+{`// You MUST replace the placeholder values below with your actual API keys.
+const CONFIG = {
+  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- REPLACE THIS
+  SUPABASE_ANON_KEY: "ey...XyX4", // <-- REPLACE THIS
+  API_KEY: "AIza...Bzgk", // <-- REPLACE THIS
+};`}
+                        </code>
+                    </pre>
+                </div>
+                
+                 <p className="text-center text-slate-400 mt-8 text-md">
+                    Once you have replaced these keys with your own and saved the file, this message will disappear and the application will load.
+                </p>
+            </div>
         </div>
     );
 };
@@ -42,6 +59,11 @@ const AppContent: React.FC = () => {
     const { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, users, updateUserRole, deletionLog, loading: docketsLoading } = useDockets();
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedDocketId, setSelectedDocketId] = useState<string | null>(null);
+
+    // This is the most important check. If default keys are used, block the entire app.
+    if (usingDefaultKeys) {
+        return <FatalConfigError />;
+    }
 
     const navigate = (path: string) => {
         window.location.hash = path;
@@ -152,7 +174,6 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="flex flex-col min-h-screen">
-            <ConfigWarningBanner />
             <Header onNewDocket={handleNewDocket} onNavigate={handleNavigation} currentUser={currentUser} />
             <main className="flex-grow">
                 {renderContent()}

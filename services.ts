@@ -1,30 +1,45 @@
 
+
 import { createClient, User } from "@supabase/supabase-js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { AuthUser } from "./types";
 import { Database } from './database.types';
 
-// --- IMPORTANT CONFIGURATION ---
-// This application runs directly in the browser without a build step, so it
-// CANNOT access environment variables from your hosting provider (like Netlify).
-// The advice to use `process.env` or `import.meta.env` applies to projects with
-// a build tool (like Vite or Webpack), which this project does not use.
+// ===================================================================================
+// START HERE: ACTION REQUIRED
+// ===================================================================================
 //
-// You MUST replace the placeholder values below with your actual API keys.
+// This application runs directly in the browser and has NO BUILD STEP.
+// It CANNOT read environment variables from your hosting provider (like Netlify).
+// The advice to use `process.env` or `import.meta.env` will NOT work for this project.
+//
+// You MUST replace the placeholder values in the CONFIG object below with your
+// actual API keys from your Supabase project and Google AI Studio.
+//
+// ===================================================================================
 const CONFIG = {
-  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- This is a placeholder
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4", // <-- This is a placeholder
-  API_KEY: "AIzaSyDdkzkHodaauz8A7M7QyxDa1kzuNz8Bzgk", // <-- This is a placeholder
+  // 1. Get this from your Supabase project > Settings > API > Project URL
+  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co",
+
+  // 2. Get this from your Supabase project > Settings > API > Project API Keys > anon (public)
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4",
+
+  // 3. Get this from Google AI Studio > "Get API key"
+  API_KEY: "AIzaSyDdkzkHodaauz8A7M7QyxDa1kzuNz8Bzgk",
 };
+// ===================================================================================
+// END OF CONFIGURATION
+// ===================================================================================
 
-// This flag checks if you've replaced the default keys.
-// A warning banner will be shown in the app if you haven't.
-export const usingDefaultKeys = CONFIG.SUPABASE_URL === "https://htoipoewypnertovrzbi.supabase.co" || !CONFIG.API_KEY;
 
+// This flag checks if the API keys have been configured.
+// The app will show a full-screen error if this is true.
+export const usingDefaultKeys = !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY || !CONFIG.API_KEY;
 
 const supabaseUrl = CONFIG.SUPABASE_URL;
 const supabaseAnonKey = CONFIG.SUPABASE_ANON_KEY;
 
+// This will throw an error immediately if keys are completely missing.
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMsg = "Supabase URL and/or Anon Key are critically missing. Edit services.ts and fill in the CONFIG object.";
   document.body.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #FFFBEB; color: #92400E; border: 1px solid #FBBF24; border-radius: 8px; margin: 2rem;">
@@ -50,9 +65,7 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
 
         // If a profile exists, return it
         if (profile) {
-            // Failsafe for super admins, ensuring their role is always 'admin'
             const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
-            // The role from the DB is now correctly typed, so we can use it directly.
             const determinedRole = isSuperAdmin ? 'admin' : profile.role;
             return { id: user.id, name: profile.name || user.id, email: user.email ?? undefined, role: determinedRole };
         }
@@ -62,7 +75,7 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
             console.log('No profile found for user, creating one...');
 
             const isSuperAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
-            const newUserRole = isSuperAdmin ? 'admin' : 'user';
+            const newUserRole: 'admin' | 'user' = isSuperAdmin ? 'admin' : 'user';
 
             const newProfileData = {
                 id: user.id,
@@ -71,16 +84,14 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
                 role: newUserRole,
             };
 
-            // Insert the new profile into the 'profiles' table
-            const { error: insertError } = await supabase.from('profiles').insert(newProfileData);
+            const { error: insertError } = await supabase.from('profiles').insert([newProfileData]);
 
             if (insertError) {
                 console.error("Fatal error: Could not create user profile on-the-fly.", insertError);
-                throw insertError; // Throw error to stop the process
+                throw insertError;
             }
 
             console.log('Profile created successfully.');
-            // Return the newly created profile data
             return { id: user.id, name: newProfileData.name, email: newProfileData.email ?? undefined, role: newProfileData.role };
         }
 
@@ -89,11 +100,11 @@ const getUserProfile = async (user: User): Promise<AuthUser | null> => {
             throw error;
         }
 
-        return null; // Should not be reached, but acts as a fallback
+        return null;
 
     } catch (e) {
         console.error("Exception in getUserProfile:", e);
-        return null; // Return null on any unexpected exception
+        return null;
     }
 };
 
@@ -144,8 +155,8 @@ let ai: GoogleGenAI | null = null;
 const initializeAi = (): GoogleGenAI | null => {
     const apiKey = CONFIG.API_KEY;
 
-    if (!apiKey) {
-        console.error("Gemini API Key is missing. Please set the API_KEY in the CONFIG object in services.ts. AI features will be disabled.");
+    if (usingDefaultKeys) {
+        console.error("Gemini API Key is missing or is a placeholder. AI features will be disabled.");
         return null;
     }
     

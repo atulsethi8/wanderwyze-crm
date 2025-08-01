@@ -1,13 +1,10 @@
-
-import { Client, Comment, UploadedFile, Invoice, Itinerary, Passenger, Payment } from "./types";
-
 export type Json =
   | string
   | number
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
 export interface Database {
   public: {
@@ -72,16 +69,16 @@ export interface Database {
       dockets: {
         Row: {
           agent_id: string | null
-          client: Client
-          comments: Comment[]
+          client: Json
+          comments: Json
           created_at: string
           created_by: string
-          files: UploadedFile[]
+          files: Json
           id: string
-          invoices: Invoice[]
-          itinerary: Itinerary
-          passengers: Passenger[]
-          payments: Payment[]
+          invoices: Json
+          itinerary: Json
+          passengers: Json
+          payments: Json
           search_tags: string[]
           status: string
           tag: string
@@ -89,16 +86,16 @@ export interface Database {
         }
         Insert: {
           agent_id: string | null
-          client: Client
-          comments: Comment[]
+          client: Json
+          comments: Json
           created_at: string
           created_by: string
-          files: UploadedFile[]
+          files: Json
           id: string
-          invoices: Invoice[]
-          itinerary: Itinerary
-          passengers: Passenger[]
-          payments: Payment[]
+          invoices: Json
+          itinerary: Json
+          passengers: Json
+          payments: Json
           search_tags: string[]
           status: string
           tag: string
@@ -106,16 +103,16 @@ export interface Database {
         }
         Update: {
           agent_id?: string | null
-          client?: Client
-          comments?: Comment[]
+          client?: Json
+          comments?: Json
           created_at?: string
           created_by?: string
-          files?: UploadedFile[]
+          files?: Json
           id?: string
-          invoices?: Invoice[]
-          itinerary?: Itinerary
-          passengers?: Passenger[]
-          payments?: Payment[]
+          invoices?: Json
+          itinerary?: Json
+          passengers?: Json
+          payments?: Json
           search_tags?: string[]
           status?: string
           tag?: string
