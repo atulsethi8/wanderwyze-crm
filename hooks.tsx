@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent } from './types';
 import { supabase, supabaseService } from './services';
@@ -132,41 +133,74 @@ export const useDockets = () => {
     if (currentUser) {
         setLoading(true);
         const fetchData = async () => {
+            if (!currentUser) return; // Add a guard clause for safety
+
             try {
-                const [docketsRes, suppliersRes, agentsRes, profilesRes, deletionLogRes] = await Promise.all([
+                // Base queries that all users need
+                const basePromises = [
                     supabase.from('dockets').select('*').order('created_at', { ascending: false }),
                     supabase.from('suppliers').select('*'),
                     supabase.from('agents').select('*'),
-                    supabase.from('profiles').select('id, name, email, role'),
-                    supabase.from('deletion_log').select('*')
-                ]);
+                    supabase.from('profiles').select('id, name, email, role')
+                ];
 
-                if (docketsRes.error) throw docketsRes.error;
-                if (docketsRes.data) {
-                    const appDockets = docketsRes.data.map(mapDbDocketToAppDocket);
-                    setDockets(appDockets);
-                }
+                if (currentUser.role === 'admin') {
+                    // --- ADMIN DATA FETCHING ---
+                    // Admins can fetch everything, including the deletion log
+                    const adminPromises = [
+                        ...basePromises,
+                        supabase.from('deletion_log').select('*')
+                    ];
 
-                if (suppliersRes.error) throw suppliersRes.error;
-                if(suppliersRes.data) setSuppliers(suppliersRes.data.map(mapDbSupplierToAppSupplier));
+                    const [docketsRes, suppliersRes, agentsRes, profilesRes, deletionLogRes] = await Promise.all(adminPromises);
 
-                if (agentsRes.error) throw agentsRes.error;
-                if(agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
+                    // Set state for admin-specific data
+                    if (deletionLogRes.error) throw deletionLogRes.error;
+                    if(deletionLogRes.data) {
+                        const mappedLogs = deletionLogRes.data.map(log => ({
+                            id: log.id,
+                            docketId: log.docket_id,
+                            clientName: log.client_name,
+                            deletedBy: log.deleted_by,
+                            deletedAt: log.deleted_at,
+                            reason: log.reason
+                        }));
+                        setDeletionLog(mappedLogs);
+                    }
 
-                if (profilesRes.error) throw profilesRes.error;
-                if(profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
+                    // Set state for other responses
+                    if (docketsRes.error) throw docketsRes.error;
+                    if (docketsRes.data) setDockets(docketsRes.data.map(mapDbDocketToAppDocket));
 
-                if (deletionLogRes.error) throw deletionLogRes.error;
-                if(deletionLogRes.data) {
-                     const mappedLogs = deletionLogRes.data.map(log => ({
-                        id: log.id,
-                        docketId: log.docket_id,
-                        clientName: log.client_name,
-                        deletedBy: log.deleted_by,
-                        deletedAt: log.deleted_at,
-                        reason: log.reason
-                    }));
-                    setDeletionLog(mappedLogs);
+                    if (suppliersRes.error) throw suppliersRes.error;
+                    if (suppliersRes.data) setSuppliers(suppliersRes.data.map(mapDbSupplierToAppSupplier));
+
+                    if (agentsRes.error) throw agentsRes.error;
+                    if (agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
+
+                    if (profilesRes.error) throw profilesRes.error;
+                    if (profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
+
+                } else {
+                    // --- REGULAR USER DATA FETCHING ---
+                    // Regular users fetch everything EXCEPT the deletion log
+                    const [docketsRes, suppliersRes, agentsRes, profilesRes] = await Promise.all(basePromises);
+
+                    // Set the deletion log to empty for non-admins
+                    setDeletionLog([]);
+
+                    // Set state for other responses
+                    if (docketsRes.error) throw docketsRes.error;
+                    if (docketsRes.data) setDockets(docketsRes.data.map(mapDbDocketToAppDocket));
+
+                    if (suppliersRes.error) throw suppliersRes.error;
+                    if (suppliersRes.data) setSuppliers(suppliersRes.data.map(mapDbSupplierToAppSupplier));
+
+                    if (agentsRes.error) throw agentsRes.error;
+                    if (agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
+
+                    if (profilesRes.error) throw profilesRes.error;
+                    if (profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
                 }
 
             } catch (error: any) {
