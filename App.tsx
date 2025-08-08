@@ -33,21 +33,21 @@ const FatalConfigError: React.FC = () => {
 
                 <div className="mt-8 bg-slate-900 p-6 rounded-lg">
                      <p className="text-slate-200 text-md mb-4">
-                        To fix this, create a file named <code>.env</code> in the root directory of your project and add the following variables:
+                        To fix this, provide the following environment variables to your deployment environment (e.g., Netlify, Vercel):
                     </p>
                     <pre className="bg-black text-white p-4 rounded-md overflow-x-auto text-sm">
                         <code>
-{`# Supabase Credentials
+{`# Supabase Credentials (User defined prefix, e.g. VITE_)
 VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
-# Google Gemini API Key
-VITE_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
+# Google Gemini API Key (MUST be named API_KEY)
+API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 `}
                         </code>
                     </pre>
                      <p className="text-slate-400 mt-4 text-sm">
-                        After creating the <code>.env</code> file, you will need to restart your development server for the changes to take effect.
+                        After setting the variables, you may need to redeploy your application for the changes to take effect.
                     </p>
                 </div>
                 

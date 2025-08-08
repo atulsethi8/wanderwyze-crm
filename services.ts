@@ -1,4 +1,6 @@
 
+// This file no longer needs the vite client reference.
+// It caused confusion as the environment doesn't seem to be a standard Vite setup.
 
 import { createClient, type User } from "@supabase/supabase-js";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -10,38 +12,37 @@ import { Database } from './database.types';
 // ===================================================================================
 //
 // This application is configured to use environment variables for API keys.
-// You must create a `.env` file in the root of your project and add your keys.
+// These are expected to be injected by the build/deployment environment.
 //
-// The file should look like this:
-//
-// VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
-// VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-// API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
-//
-// IMPORTANT: For Vite to expose these variables to the browser, they MUST be
-// prefixed with `VITE_`.
+// For Supabase: process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY
+// For Gemini: process.env.API_KEY
 //
 // ===================================================================================
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+// Safely access process.env. If it doesn't exist, default to an empty object.
+// This prevents "process is not defined" ReferenceErrors in browser environments
+// that don't have it polyfilled.
+const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
+
+const supabaseUrl = env.VITE_SUPABASE_URL;
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
+// The Gemini API key MUST be API_KEY as per coding guidelines.
+const geminiApiKey = env.API_KEY;
 
 
-// This flag checks if the Supabase keys have been configured.
-// The app will show a full-screen error if this is true.
-export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey;
+// This flag checks if ALL required keys have been configured.
+// The App.tsx component will use this to show a full-screen error if it's true.
+export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey || !geminiApiKey;
 
-// This will throw an error immediately if keys are critically missing.
-if (usingDefaultKeys) {
-  const errorMsg = "Supabase URL and/or Anon Key are missing. Please ensure your .env file is set up correctly with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.";
-  document.body.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #FFFBEB; color: #92400E; border: 1px solid #FBBF24; border-radius: 8px; margin: 2rem;">
-    <h1 style="font-size: 1.5rem; font-weight: bold;">Fatal Configuration Error</h1>
-    <p style="margin-top: 1rem;">${errorMsg}</p>
-  </div>`;
-  throw new Error(errorMsg);
-}
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// We initialize Supabase client here.
+// To prevent the app from crashing on startup if keys are missing, we provide
+// dummy placeholder values. The `usingDefaultKeys` flag above will be true,
+// and the <App> component will show a config error screen instead of
+// ever trying to use this dummy client.
+export const supabase = createClient<Database>(
+    supabaseUrl || "http://localhost:54321", 
+    supabaseAnonKey || "dummy-key"
+);
 
 
 const ADMIN_EMAILS = ['admin@wanderwyze.com', 'a4atul@gmail.com', 'atul@wanderwyze.com', 'ravi@wanderwyze.com'];
@@ -147,9 +148,9 @@ let ai: GoogleGenAI | null = null;
 
 const initializeAi = (): GoogleGenAI => {
     if (!ai) {
-        // As per guidelines, apiKey is sourced directly from process.env.API_KEY
-        // and is assumed to be present. The '!' asserts it's not null.
-        ai = new GoogleGenAI({apiKey: process.env.API_KEY!});
+        // The `usingDefaultKeys` check in App.tsx ensures the app doesn't run if geminiApiKey is missing.
+        // The '!' asserts it's not null here.
+        ai = new GoogleGenAI({apiKey: geminiApiKey!});
     }
     return ai;
 };
