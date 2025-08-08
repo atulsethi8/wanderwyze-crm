@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
 import { Header } from './components/Header';
@@ -24,29 +25,34 @@ const FatalConfigError: React.FC = () => {
             <div className="max-w-3xl w-full bg-slate-800 rounded-lg shadow-2xl p-8 border border-red-500">
                 <div className="text-center">
                     <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    <h1 className="text-3xl font-bold text-red-400">Action Required: API Keys Not Set</h1>
+                    <h1 className="text-3xl font-bold text-red-400">Action Required: Environment Variables Not Set</h1>
                     <p className="text-slate-300 mt-4 text-lg">
-                        This application cannot connect to the database or use AI features because it is still using default placeholder API keys.
+                        This application cannot connect to its backend services because the required API keys are missing.
                     </p>
                 </div>
 
                 <div className="mt-8 bg-slate-900 p-6 rounded-lg">
-                    <p className="text-slate-200 text-md mb-4">You must open the following file in your code editor and replace the placeholder values:</p>
-                    <p className="font-mono text-lg text-amber-300 mb-2">File: <code>services.ts</code></p>
+                     <p className="text-slate-200 text-md mb-4">
+                        To fix this, create a file named <code>.env</code> in the root directory of your project and add the following variables:
+                    </p>
                     <pre className="bg-black text-white p-4 rounded-md overflow-x-auto text-sm">
                         <code>
-{`// You MUST replace the placeholder values below with your actual API keys.
-const CONFIG = {
-  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co", // <-- REPLACE THIS
-  SUPABASE_ANON_KEY: "ey...XyX4", // <-- REPLACE THIS
-  API_KEY: "AIza...Bzgk", // <-- REPLACE THIS
-};`}
+{`# Supabase Credentials
+VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
+# Google Gemini API Key
+VITE_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
+`}
                         </code>
                     </pre>
+                     <p className="text-slate-400 mt-4 text-sm">
+                        After creating the <code>.env</code> file, you will need to restart your development server for the changes to take effect.
+                    </p>
                 </div>
                 
                  <p className="text-center text-slate-400 mt-8 text-md">
-                    Once you have replaced these keys with your own and saved the file, this message will disappear and the application will load.
+                    The application will not function until these keys are provided.
                 </p>
             </div>
         </div>

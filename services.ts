@@ -1,47 +1,39 @@
 
 
-import { createClient, User } from "@supabase/supabase-js";
+import { createClient, type User } from "@supabase/supabase-js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { AuthUser } from "./types";
 import { Database } from './database.types';
 
 // ===================================================================================
-// START HERE: ACTION REQUIRED
+// ENVIRONMENT VARIABLE CONFIGURATION
 // ===================================================================================
 //
-// This application runs directly in the browser and has NO BUILD STEP.
-// It CANNOT read environment variables from your hosting provider (like Netlify).
-// The advice to use `process.env` or `import.meta.env` will NOT work for this project.
+// This application is configured to use environment variables for API keys.
+// You must create a `.env` file in the root of your project and add your keys.
 //
-// You MUST replace the placeholder values in the CONFIG object below with your
-// actual API keys from your Supabase project and Google AI Studio.
+// The file should look like this:
+//
+// VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
+// VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+// API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
+//
+// IMPORTANT: For Vite to expose these variables to the browser, they MUST be
+// prefixed with `VITE_`.
 //
 // ===================================================================================
-const CONFIG = {
-  // 1. Get this from your Supabase project > Settings > API > Project URL
-  SUPABASE_URL: "https://htoipoewypnertovrzbi.supabase.co",
 
-  // 2. Get this from your Supabase project > Settings > API > Project API Keys > anon (public)
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0b2lwb2V3eXBuZXJ0b3ZyemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTMwNjEsImV4cCI6MjA2ODA2OTA2MX0.fHYI-2WmNj2hWrvkj8OhvT46vogx5C5C9zxKjxSXyX4",
-
-  // 3. Get this from Google AI Studio > "Get API key"
-  API_KEY: "AIzaSyDdkzkHodaauz8A7M7QyxDa1kzuNz8Bzgk",
-};
-// ===================================================================================
-// END OF CONFIGURATION
-// ===================================================================================
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 
-// This flag checks if the API keys have been configured.
+// This flag checks if the Supabase keys have been configured.
 // The app will show a full-screen error if this is true.
-export const usingDefaultKeys = !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY || !CONFIG.API_KEY;
+export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey;
 
-const supabaseUrl = CONFIG.SUPABASE_URL;
-const supabaseAnonKey = CONFIG.SUPABASE_ANON_KEY;
-
-// This will throw an error immediately if keys are completely missing.
-if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMsg = "Supabase URL and/or Anon Key are critically missing. Edit services.ts and fill in the CONFIG object.";
+// This will throw an error immediately if keys are critically missing.
+if (usingDefaultKeys) {
+  const errorMsg = "Supabase URL and/or Anon Key are missing. Please ensure your .env file is set up correctly with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.";
   document.body.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #FFFBEB; color: #92400E; border: 1px solid #FBBF24; border-radius: 8px; margin: 2rem;">
     <h1 style="font-size: 1.5rem; font-weight: bold;">Fatal Configuration Error</h1>
     <p style="margin-top: 1rem;">${errorMsg}</p>
@@ -153,16 +145,11 @@ export const supabaseService = {
 
 let ai: GoogleGenAI | null = null;
 
-const initializeAi = (): GoogleGenAI | null => {
-    const apiKey = CONFIG.API_KEY;
-
-    if (usingDefaultKeys) {
-        console.error("Gemini API Key is missing or is a placeholder. AI features will be disabled.");
-        return null;
-    }
-    
+const initializeAi = (): GoogleGenAI => {
     if (!ai) {
-        ai = new GoogleGenAI({apiKey: apiKey});
+        // As per guidelines, apiKey is sourced directly from process.env.API_KEY
+        // and is assumed to be present. The '!' asserts it's not null.
+        ai = new GoogleGenAI({apiKey: process.env.API_KEY!});
     }
     return ai;
 };
@@ -171,9 +158,6 @@ const initializeAi = (): GoogleGenAI | null => {
 export const geminiService = {
   getItinerarySuggestions: async (destination: string, duration: number, interests: string) => {
     const aiInstance = initializeAi();
-    if (!aiInstance) {
-        throw new Error("Gemini AI service is not available. Please ensure the API_KEY is configured in services.ts.");
-    }
     const prompt = `Provide itinerary suggestions for a ${duration}-day trip to ${destination} with interests in ${interests}. Return a JSON object.`;
     const response = await aiInstance.models.generateContent({
       model: "gemini-2.5-flash",
@@ -205,9 +189,6 @@ export const geminiService = {
 
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
       const aiInstance = initializeAi();
-      if (!aiInstance) {
-        throw new Error("Gemini AI service is not available. Please ensure the API_KEY is configured in services.ts.");
-      }
       const documentPart = { inlineData: { data: fileContent, mimeType } };
       const textPart = { text: promptText };
 

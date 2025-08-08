@@ -1,3 +1,14 @@
+import type {
+  Client,
+  Comment,
+  UploadedFile,
+  Invoice,
+  Itinerary,
+  Passenger,
+  Payment,
+  CompanySettings,
+} from "./types";
+
 export type Json =
   | string
   | number
@@ -29,15 +40,15 @@ export interface Database {
       company_settings: {
         Row: {
           id: number
-          settings: any
+          settings: CompanySettings
         }
         Insert: {
           id: number
-          settings: any
+          settings: CompanySettings
         }
         Update: {
           id?: number
-          settings?: any
+          settings?: CompanySettings
         }
       }
       deletion_log: {
@@ -69,16 +80,16 @@ export interface Database {
       dockets: {
         Row: {
           agent_id: string | null
-          client: any
-          comments: any
+          client: Client
+          comments: Comment[]
           created_at: string
           created_by: string
-          files: any
+          files: UploadedFile[]
           id: string
-          invoices: any
-          itinerary: any
-          passengers: any
-          payments: any
+          invoices: Invoice[]
+          itinerary: Itinerary
+          passengers: Passenger[]
+          payments: Payment[]
           search_tags: string[]
           status: string
           tag: string
@@ -86,16 +97,16 @@ export interface Database {
         }
         Insert: {
           agent_id: string | null
-          client: any
-          comments: any
+          client: Client
+          comments: Comment[]
           created_at: string
           created_by: string
-          files: any
+          files: UploadedFile[]
           id: string
-          invoices: any
-          itinerary: any
-          passengers: any
-          payments: any
+          invoices: Invoice[]
+          itinerary: Itinerary
+          passengers: Passenger[]
+          payments: Payment[]
           search_tags: string[]
           status: string
           tag: string
@@ -103,16 +114,16 @@ export interface Database {
         }
         Update: {
           agent_id?: string | null
-          client?: any
-          comments?: any
+          client?: Client
+          comments?: Comment[]
           created_at?: string
           created_by?: string
-          files?: any
+          files?: UploadedFile[]
           id?: string
-          invoices?: any
-          itinerary?: any
-          passengers?: any
-          payments?: any
+          invoices?: Invoice[]
+          itinerary?: Itinerary
+          passengers?: Passenger[]
+          payments?: Payment[]
           search_tags?: string[]
           status?: string
           tag?: string
