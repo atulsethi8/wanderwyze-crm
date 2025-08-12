@@ -67,7 +67,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Fetch initial session to avoid hanging spinner in environments with no prior session
     const init = async () => {
       try {
-        const { user } = await supabaseService.getSession();
+        const timeout = new Promise<{ user: AuthUser | null }>((resolve) => setTimeout(() => resolve({ user: null }), 4000));
+        const sessionPromise = supabaseService.getSession();
+        const { user } = await Promise.race([sessionPromise, timeout]);
         if (!isMounted) return;
         setCurrentUser(user);
       } catch (error) {
