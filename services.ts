@@ -107,19 +107,19 @@ export const supabaseService = {
     if (error) return { user: null, error: error.message };
     if (!data.user) return { user: null, error: 'Login failed, no user returned.' };
     
-    try {
-      const userProfile = await getUserProfile(data.user);
-      if (userProfile) return { user: userProfile, error: null };
-    } catch {}
-
-    // Fallback minimal profile if profile fetch/creation fails
-    const fallback: AuthUser = {
+    // Return a minimal user immediately for UI, determine admin by email
+    const isSuperAdmin = data.user.email ? ADMIN_EMAILS.includes(data.user.email) : false;
+    const immediateUser: AuthUser = {
       id: data.user.id,
       name: data.user.email || data.user.id,
       email: data.user.email ?? undefined,
-      role: 'user'
+      role: isSuperAdmin ? 'admin' : 'user'
     };
-    return { user: fallback, error: null };
+
+    // Best-effort: fetch/create full profile in background; do not block login
+    getUserProfile(data.user).catch(() => {});
+
+    return { user: immediateUser, error: null };
   },
 
   async signOut(): Promise<void> {
