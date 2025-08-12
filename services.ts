@@ -38,7 +38,14 @@ export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey || !geminiApiKe
 // ever trying to use this dummy client.
 export const supabase = createClient<Database>(
     supabaseUrl || "http://localhost:54321", 
-    supabaseAnonKey || "dummy-key"
+    supabaseAnonKey || "dummy-key",
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    }
 );
 
 
@@ -106,6 +113,14 @@ export const supabaseService = {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { user: null, error: error.message };
     if (!data.user) return { user: null, error: 'Login failed, no user returned.' };
+    
+    // Ensure session is persisted to localStorage
+    if (data.session?.access_token && data.session?.refresh_token) {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      });
+    }
     
     // Return a minimal user immediately for UI, determine admin by email
     const isSuperAdmin = data.user.email ? ADMIN_EMAILS.includes(data.user.email) : false;
