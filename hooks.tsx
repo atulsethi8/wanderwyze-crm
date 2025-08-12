@@ -89,12 +89,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (session?.user) {
                 const profile = await supabaseService.getUserProfile(session.user);
                 setCurrentUser(profile);
-            } else {
-                setCurrentUser(null);
             }
         } catch (error) {
             console.error("Error in onAuthStateChange handler:", error);
-            setCurrentUser(null);
         }
     });
 
