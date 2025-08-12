@@ -115,6 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         throw new Error(error);
       }
+      if (user) {
+        setCurrentUser(user);
+      }
     } finally {
       setLoading(false);
     }
