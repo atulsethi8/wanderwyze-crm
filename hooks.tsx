@@ -62,6 +62,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Fetch initial session to avoid hanging spinner in environments with no prior session
+    const init = async () => {
+      try {
+        const { user } = await supabaseService.getSession();
+        if (!isMounted) return;
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        if (!isMounted) return;
+        setCurrentUser(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    init();
+
+    // Subscribe for subsequent auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         try {
             if (session?.user) {
@@ -73,12 +93,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
             console.error("Error in onAuthStateChange handler:", error);
             setCurrentUser(null);
-        } finally {
-            setLoading(false);
         }
     });
 
     return () => {
+      isMounted = false;
       authListener?.subscription.unsubscribe();
     };
   }, []);
