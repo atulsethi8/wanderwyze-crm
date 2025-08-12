@@ -19,15 +19,12 @@ import { Database } from './database.types';
 //
 // ===================================================================================
 
-// Safely access process.env. If it doesn't exist, default to an empty object.
-// This prevents "process is not defined" ReferenceErrors in browser environments
-// that don't have it polyfilled.
-const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
-
-const supabaseUrl = env.VITE_SUPABASE_URL;
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
+// IMPORTANT: Use direct references to process.env.* so Vite can statically replace
+// these at build time. Do NOT access via an intermediate object like `const env = process.env`.
+const supabaseUrl = (typeof process !== 'undefined' ? (process.env as any).VITE_SUPABASE_URL : undefined);
+const supabaseAnonKey = (typeof process !== 'undefined' ? (process.env as any).VITE_SUPABASE_ANON_KEY : undefined);
 // The Gemini API key MUST be API_KEY as per coding guidelines.
-const geminiApiKey = env.API_KEY;
+const geminiApiKey = (typeof process !== 'undefined' ? (process.env as any).API_KEY : undefined);
 
 
 // This flag checks if ALL required keys have been configured.
@@ -201,6 +198,7 @@ export const geminiService = {
             responseSchema: schema
         }
       });
+
       const jsonText = response.text.trim();
       return JSON.parse(jsonText);
   }
