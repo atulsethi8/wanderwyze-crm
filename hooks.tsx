@@ -107,7 +107,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, pass: string) => {
     setLoading(true);
     try {
-      const { user, error } = await supabaseService.signInWithPassword(email, pass);
+      const timeoutPromise = new Promise<{ user: any; error: string | null }>((_, reject) => {
+        setTimeout(() => reject(new Error('Login request timed out. Please check your network and environment configuration.')), 10000);
+      });
+      const signInPromise = supabaseService.signInWithPassword(email, pass);
+      const { user, error } = await Promise.race([signInPromise, timeoutPromise]) as { user: any; error: string | null };
       if (error) {
         throw new Error(error);
       }
