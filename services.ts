@@ -107,8 +107,19 @@ export const supabaseService = {
     if (error) return { user: null, error: error.message };
     if (!data.user) return { user: null, error: 'Login failed, no user returned.' };
     
-    const userProfile = await getUserProfile(data.user);
-    return { user: userProfile, error: null };
+    try {
+      const userProfile = await getUserProfile(data.user);
+      if (userProfile) return { user: userProfile, error: null };
+    } catch {}
+
+    // Fallback minimal profile if profile fetch/creation fails
+    const fallback: AuthUser = {
+      id: data.user.id,
+      name: data.user.email || data.user.id,
+      email: data.user.email ?? undefined,
+      role: 'user'
+    };
+    return { user: fallback, error: null };
   },
 
   async signOut(): Promise<void> {
@@ -121,8 +132,19 @@ export const supabaseService = {
      if (error || !session) {
          return { user: null };
      }
-     const userProfile = await getUserProfile(session.user);
-     return { user: userProfile };
+     try {
+       const userProfile = await getUserProfile(session.user);
+       if (userProfile) return { user: userProfile };
+     } catch {}
+     // Fallback minimal profile
+     return {
+       user: {
+         id: session.user.id,
+         name: session.user.email || session.user.id,
+         email: session.user.email ?? undefined,
+         role: 'user'
+       }
+     };
   },
   
   async sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
