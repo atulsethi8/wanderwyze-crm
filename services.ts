@@ -20,11 +20,11 @@ import { Database } from './database.types';
 // ===================================================================================
 
 // IMPORTANT: Use direct references to process.env.* so Vite can statically replace
-// these at build time. Do NOT access via an intermediate object like `const env = process.env`.
-const supabaseUrl = (typeof process !== 'undefined' ? (process.env as any).VITE_SUPABASE_URL : undefined);
-const supabaseAnonKey = (typeof process !== 'undefined' ? (process.env as any).VITE_SUPABASE_ANON_KEY : undefined);
+// these at build time.
+const supabaseUrl = process.env.VITE_SUPABASE_URL as unknown as string | undefined;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY as unknown as string | undefined;
 // The Gemini API key MUST be API_KEY as per coding guidelines.
-const geminiApiKey = (typeof process !== 'undefined' ? (process.env as any).API_KEY : undefined);
+const geminiApiKey = process.env.API_KEY as unknown as string | undefined;
 
 
 // This flag checks if ALL required keys have been configured.
