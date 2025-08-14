@@ -611,11 +611,20 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             excursions: stateToSave.itinerary.excursions.reduce((acc, e) => ({ netCost: acc.netCost + (e.netCost || 0), grossBilled: acc.grossBilled + (e.grossBilled || 0) }), { netCost: 0, grossBilled: 0 })
         };
 
+        const findMostRecentSystemForType = (label: 'Flight' | 'Hotel' | 'Transfers' | 'Excursions') => {
+            return (stateToSave.comments || []).find(c => c.isSystem && typeof c.text === 'string' && c.text.trim().endsWith(`– ${label}`));
+        };
+
         const pushTypeLogIfAny = (label: 'Flight' | 'Hotel' | 'Transfers' | 'Excursions', net: number, gross: number) => {
             if ((net || 0) > 0 || (gross || 0) > 0) {
+                const nextText = `${ts} – Net Cost: ${rupee(net)}, Gross Cost: ${rupee(gross)} – ${label}`;
+                const recent = findMostRecentSystemForType(label);
+                if (recent && recent.isSystem && recent.text === nextText) {
+                    return; // skip identical consecutive duplicate
+                }
                 newSystemLogs.push({
                     id: `SYS-COST-${label}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-                    text: `${ts} – Net Cost: ${rupee(net)}, Gross Cost: ${rupee(gross)} – ${label}`,
+                    text: nextText,
                     timestamp: now.toISOString(),
                     author: 'System',
                     isSystem: true
