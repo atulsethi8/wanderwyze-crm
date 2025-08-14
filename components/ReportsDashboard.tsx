@@ -174,37 +174,49 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Client Name</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Billed</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Amount Paid</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Balance Due</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {(() => {
-                  let totalProfitAgent = 0;
+                  let sumBilled = 0; let sumPaid = 0; let sumBalance = 0;
                   const rows = docketsByAgent.map(d => {
-                    const { grossBilled, netCost } = calculateDocketTotals(d);
-                    const profit = grossBilled - netCost;
-                    totalProfitAgent += profit;
+                    const { grossBilled } = calculateDocketTotals(d);
+                    const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+                    const balance = Math.max(0, grossBilled - paid);
+                    sumBilled += grossBilled; sumPaid += paid; sumBalance += balance;
                     const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
+                    const created = d.createdAt ? formatDate(d.createdAt) : 'N/A';
                     return (
                       <tr key={d.id}>
+                        <td className="px-4 py-3 text-sm text-slate-600">{created}</td>
                         <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.id}</button></td>
+                        <td className="px-4 py-3 text-sm text-slate-800">{d.client.name}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
-                        <td className={`px-4 py-3 text-sm font-semibold ${profit>=0?'text-green-600':'text-red-600'}`}>{formatCurrency(profit)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(grossBilled)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(paid)}</td>
+                        <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(sumBalance && balance)}</td>
                       </tr>
                     );
                   });
                   rows.push(
                     <tr key="agent-totals" className="bg-slate-50 font-semibold">
-                      <td className="px-4 py-3" colSpan={2}>Total Profit</td>
-                      <td className="px-4 py-3">{formatCurrency(totalProfitAgent)}</td>
+                      <td className="px-4 py-3" colSpan={4}>Totals</td>
+                      <td className="px-4 py-3">{formatCurrency(sumBilled)}</td>
+                      <td className="px-4 py-3">{formatCurrency(sumPaid)}</td>
+                      <td className="px-4 py-3">{formatCurrency(sumBalance)}</td>
                     </tr>
                   );
                   return rows;
                 })()}
                 {docketsByAgent.length === 0 && (
-                  <tr><td colSpan={3} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
                 )}
               </tbody>
             </table>
