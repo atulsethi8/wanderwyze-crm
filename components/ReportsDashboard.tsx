@@ -192,27 +192,6 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
               </select>
             </div>
           </div>
-          {/* Metrics panel */}
-          {(() => {
-            const sum = docketsByAgentDest.reduce((acc, d) => {
-              const { grossBilled, netCost } = calculateDocketTotals(d);
-              const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-              acc.gross += grossBilled; acc.net += netCost; acc.paid += paid; acc.balance += Math.max(0, grossBilled - paid); acc.profit += (grossBilled - netCost); return acc;
-            }, {gross:0, net:0, paid:0, balance:0, profit:0});
-            const agentName = agentFilter === 'all' ? 'All' : (agents.find(a => a.id === agentFilter)?.name || 'Unknown');
-            const destName = destinationFilter === 'all' ? 'All' : destinationFilter;
-            return (
-              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Agent</p><p className="text-sm font-semibold text-slate-800">{agentName}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Destination</p><p className="text-sm font-semibold text-slate-800">{destName}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Billed</p><p className="text-sm font-semibold">{formatCurrency(sum.gross)}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Net</p><p className="text-sm font-semibold">{formatCurrency(sum.net)}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Amount Paid</p><p className="text-sm font-semibold">{formatCurrency(sum.paid)}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Balance Due</p><p className="text-sm font-semibold">{formatCurrency(sum.balance)}</p></div>
-                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Profit</p><p className="text-sm font-semibold">{formatCurrency(sum.profit)}</p></div>
-              </div>
-            )
-          })()}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
@@ -223,17 +202,20 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Billed</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Amount Paid</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Balance Due</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {(() => {
-                  let sumBilled = 0; let sumPaid = 0; let sumBalance = 0;
+                  let sumBilled = 0; let sumPaid = 0; let sumBalance = 0; let sumProfit = 0;
                   const rows = docketsByAgentDest.map(d => {
-                    const { grossBilled } = calculateDocketTotals(d);
+                    const { grossBilled, netCost } = calculateDocketTotals(d);
                     const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+                    const profit = (grossBilled - netCost);
                     const balance = Math.max(0, grossBilled - paid);
                     sumBilled += grossBilled; sumPaid += paid; sumBalance += balance;
+                    sumProfit += profit;
                     const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
                     const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
                     const rowBg = balance === 0 ? '#d4edda' : '#f8d7da';
@@ -245,6 +227,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(grossBilled)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(paid)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(profit)}</td>
                         <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(balance)}</td>
                       </tr>
                     );
@@ -254,13 +237,14 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                       <td className="px-4 py-3" colSpan={4}>Totals</td>
                       <td className="px-4 py-3">{formatCurrency(sumBilled)}</td>
                       <td className="px-4 py-3">{formatCurrency(sumPaid)}</td>
+                      <td className="px-4 py-3">{formatCurrency(sumProfit)}</td>
                       <td className="px-4 py-3">{formatCurrency(sumBalance)}</td>
                     </tr>
                   );
                   return rows;
                 })()}
                 {docketsByAgentDest.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
                 )}
               </tbody>
             </table>
