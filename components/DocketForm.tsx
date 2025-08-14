@@ -632,14 +632,10 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             }
         };
 
-        // Always log current per-type costs on save
-        pushTypeLogIfAny('Flight', totals.flights.netCost, totals.flights.grossBilled);
-        pushTypeLogIfAny('Hotel', totals.hotels.netCost, totals.hotels.grossBilled);
-        pushTypeLogIfAny('Transfers', totals.transfers.netCost, totals.transfers.grossBilled);
-        pushTypeLogIfAny('Excursions', totals.excursions.netCost, totals.excursions.grossBilled);
-
-        // Additionally, if status moved to Confirmed, log again (separate entries)
-        if (docket && docket.status !== BookingStatus.Confirmed && stateToSave.status === BookingStatus.Confirmed) {
+        // Log costs only when creating a new docket OR when status changes to Confirmed
+        const isNew = !docket;
+        const statusJustConfirmed = !!docket && docket.status !== BookingStatus.Confirmed && stateToSave.status === BookingStatus.Confirmed;
+        if (isNew || statusJustConfirmed) {
             pushTypeLogIfAny('Flight', totals.flights.netCost, totals.flights.grossBilled);
             pushTypeLogIfAny('Hotel', totals.hotels.netCost, totals.hotels.grossBilled);
             pushTypeLogIfAny('Transfers', totals.transfers.netCost, totals.transfers.grossBilled);
