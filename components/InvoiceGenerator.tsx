@@ -162,6 +162,21 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     return { subtotal, gstAmount, grandTotal, gstBreakdown: Object.entries(gstBreakdown) };
   }, [lineItems]);
 
+  // Compute effective GST rate across all GST-applicable items
+  const gstTaxableBase = useMemo(() => {
+    return (financialTotals.gstBreakdown || []).reduce((sum, entry) => {
+      const [, info] = entry as [string, { taxableAmount: number; gstValue: number }];
+      return sum + (info?.taxableAmount || 0);
+    }, 0);
+  }, [financialTotals]);
+
+  const effectiveGstRate = useMemo(() => {
+    if (gstTaxableBase <= 0) return 0;
+    return (financialTotals.gstAmount / gstTaxableBase) * 100;
+  }, [financialTotals, gstTaxableBase]);
+
+  const formatPercent = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '')}%`;
+
   const handleSaveAndDownload = async () => {
     if (!billedToDetails || !billedToDetails.name) {
       alert("Please select and confirm a passenger to bill to.");
@@ -459,10 +474,25 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                         </div>
 
                         {financialTotals.gstAmount > 0 && (
-                          <div className="flex justify-between text-slate-800">
-                              <span>Taxes</span>
-                              <span>{formatCurrency(financialTotals.gstAmount)}</span>
-                          </div>
+                          <>
+                            {gstType === 'CGST/SGST' ? (
+                              <>
+                                <div className="flex justify-between text-slate-800">
+                                  <span>{`CGST @ ${formatPercent(effectiveGstRate / 2)}`}</span>
+                                  <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-800">
+                                  <span>{`SGST @ ${formatPercent(effectiveGstRate / 2)}`}</span>
+                                  <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex justify-between text-slate-800">
+                                <span>{`IGST @ ${formatPercent(effectiveGstRate)}`}</span>
+                                <span>{formatCurrency(financialTotals.gstAmount)}</span>
+                              </div>
+                            )}
+                          </>
                         )}
 
                         <div className="flex justify-between font-bold text-base text-slate-900 border-t pt-2 mt-2">
