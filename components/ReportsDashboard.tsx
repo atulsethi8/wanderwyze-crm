@@ -184,7 +184,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
 
         {/* Dockets List */}
         <div className="bg-white rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-slate-700 p-6">Bookings in Period</h2>
+            <h2 className="text-xl font-semibold mb-4 text-slate-700 p-6">Dockets with Outstanding Balance</h2>
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
@@ -196,16 +196,27 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Gross</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Net</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Outstanding</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
-                        {filteredDockets.map(docket => {
+                        {(() => {
+                          const rows = filteredDockets.filter(d => {
+                            const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+                            const { grossBilled } = calculateDocketTotals(d);
+                            return grossBilled - paid > 0;
+                          });
+                          let totalGross = 0; let totalNet = 0; let totalProfit = 0; let totalOutstanding = 0;
+                          const rendered = rows.map(docket => {
                             const { grossBilled, netCost } = calculateDocketTotals(docket);
                             const profit = grossBilled - netCost;
                             const mainDestination = docket.itinerary.flights[0]?.arrivalAirport || docket.itinerary.hotels[0]?.name || 'N/A';
                             const departureDate = docket.itinerary.flights[0]?.departureDate || docket.itinerary.hotels[0]?.checkIn || 'N/A';
                             const agentName = docket.agentId ? agents.find(a => a.id === docket.agentId)?.name : 'N/A';
+                            const paid = (docket.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+                            const outstanding = Math.max(0, grossBilled - paid);
+                            totalGross += grossBilled; totalNet += netCost; totalProfit += profit; totalOutstanding += outstanding;
                             
                             return (
                                 <tr key={docket.id} className="hover:bg-slate-50">
@@ -216,6 +227,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(grossBilled)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(netCost)}</td>
                                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(outstanding)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <button onClick={() => handleOpen(docket.id)} className="text-brand-primary underline">
                                             {docket.id}
@@ -223,9 +235,22 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                                     </td>
                                 </tr>
                             );
-                        })}
+                          });
+                          // Append totals row
+                          rendered.push(
+                            <tr key="totals" className="bg-slate-50 font-semibold">
+                              <td className="px-6 py-3" colSpan={4}>Totals</td>
+                              <td className="px-6 py-3">{formatCurrency(totalGross)}</td>
+                              <td className="px-6 py-3">{formatCurrency(totalNet)}</td>
+                              <td className="px-6 py-3">{formatCurrency(totalProfit)}</td>
+                              <td className="px-6 py-3">{formatCurrency(totalOutstanding)}</td>
+                              <td className="px-6 py-3"></td>
+                            </tr>
+                          );
+                          return rendered;
+                        })()}
                         {filteredDockets.length === 0 && (
-                            <tr><td colSpan={8} className="text-center py-10 text-slate-500">No dockets found for the selected date range.</td></tr>
+                            <tr><td colSpan={9} className="text-center py-10 text-slate-500">No dockets found for the selected date range.</td></tr>
                         )}
                     </tbody>
                 </table>
