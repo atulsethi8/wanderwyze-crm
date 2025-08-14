@@ -162,7 +162,6 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     return { subtotal, gstAmount, grandTotal, gstBreakdown: Object.entries(gstBreakdown) };
   }, [lineItems]);
 
-
   const handleSaveAndDownload = async () => {
     if (!billedToDetails || !billedToDetails.name) {
       alert("Please select and confirm a passenger to bill to.");
@@ -206,8 +205,31 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Add page numbers
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(10);
+        pdf.setTextColor(120);
+        pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
+      }
+
       pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -226,6 +248,11 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       setLineItems(prev => prev.filter(item => item.id !== id));
   };
   
+  // Helpers for line totals
+  const lineNet = (item: InvoiceLineItem) => (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+  const lineTax = (item: InvoiceLineItem) => item.isGstApplicable && item.gstRate ? lineNet(item) * (item.gstRate / 100) : 0;
+  const lineGross = (item: InvoiceLineItem) => lineNet(item) + lineTax(item);
+
   return (
     <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4">
       <div className="bg-slate-50 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
@@ -238,7 +265,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
         </div>
         <div className="flex-grow flex flex-col lg:flex-row overflow-auto">
           {/* Form Side */}
-          <div className="w-full lg:w-3/5 p-4 sm:p-6 bg-white overflow-y-auto print:hidden">
+          <div className="w-full lg:w-2/5 p-4 sm:p-6 bg-white overflow-y-auto print:hidden">
                 <div className="max-w-4xl mx-auto space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {/* Customer Column */}
@@ -260,6 +287,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                 placeholder="Enter customer's billing address"
                                 rows={3}
                             />
+                            <FormInput label="Email" value={billedToDetails?.email || ''} onChange={e => handleBilledToChange('email', e.target.value)} />
+                            <FormInput label="Phone" value={billedToDetails?.phone || ''} onChange={e => handleBilledToChange('phone', e.target.value)} />
                         </div>
                         {/* Invoice Details Column */}
                         <div className="grid grid-cols-2 gap-4">
@@ -288,18 +317,18 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                         <div className="hidden md:grid grid-cols-12 gap-3 px-2 py-2 font-semibold text-xs text-slate-500 uppercase">
                             <div className="col-span-5">Item Details</div>
                             <div className="col-span-1 text-right">Qty</div>
-                            <div className="col-span-2 text-right">Rate</div>
-                            <div className="col-span-2 text-right">Tax</div>
-                            <div className="col-span-2 text-right">Amount</div>
+                            <div className="col-span-2 text-right">Unit Price</div>
+                            <div className="col-span-2 text-right">Tax %</div>
+                            <div className="col-span-2 text-right">Line Total</div>
                         </div>
                         <div className="space-y-2">
                         {lineItems.map((item, index) => {
-                            const amount = (item.quantity || 0) * (item.rate || 0);
+                            const amount = lineGross(item);
                             return (
                             <div key={item.id} className="grid grid-cols-12 gap-x-3 gap-y-2 p-2 rounded-md hover:bg-slate-50 items-start">
                                 <div className="col-span-12 md:col-span-5"><FormTextarea label="" value={item.description} onChange={e => handleLineItemChange(item.id, 'description', e.target.value)} placeholder="Item Description" rows={2} /></div>
                                 <div className="col-span-4 md:col-span-1"><FormInput label="" type="number" value={item.quantity} onChange={e => handleLineItemChange(item.id, 'quantity', +e.target.value)} placeholder="Qty" className="text-right" /></div>
-                                <div className="col-span-8 md:col-span-2"><FormInput label="" type="number" value={item.rate} onChange={e => handleLineItemChange(item.id, 'rate', +e.target.value)} placeholder="Rate" className="text-right" /></div>
+                                <div className="col-span-8 md:col-span-2"><FormInput label="" type="number" value={item.rate} onChange={e => handleLineItemChange(item.id, 'rate', +e.target.value)} placeholder="Unit Price" className="text-right" /></div>
                                 <div className="col-span-8 md:col-span-2">
                                     <div className="flex items-center justify-end h-full">
                                         <FormSelect label="" value={item.gstRate} onChange={e => handleLineItemChange(item.id, 'gstRate', +e.target.value)} onFocus={()=>handleLineItemChange(item.id, 'isGstApplicable', true)}>
@@ -339,112 +368,120 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
           </div>
           
           {/* Preview Side */}
-          <div id="invoice-preview-container" className="w-full lg:w-2/5 bg-slate-200 p-4 sm:p-8 overflow-y-auto">
+          <div id="invoice-preview-container" className="w-full lg:w-3/5 bg-slate-200 p-4 sm:p-8 overflow-y-auto">
             <div id="invoice-preview" className="bg-white shadow-lg p-10 mx-auto" style={{width: '210mm', minHeight: '297mm'}}>
               {/* Header */}
-              <div className="flex justify-between items-start pb-6 mb-8">
-                <div>
-                    { settings.companyName ? <h1 className="text-3xl font-bold text-slate-800">{settings.companyName}</h1> : <div className="w-48 h-8 bg-slate-200 rounded animate-pulse"></div> }
-                    <p className="text-slate-500 whitespace-pre-line mt-2">{settings.companyAddress}</p>
-                    <p className="text-slate-500">{settings.companyContact}</p>
+              <div className="flex justify-between items-start pb-6 mb-8 border-b-2 border-slate-200">
+                <div className="flex items-start gap-4">
+                    <div className="w-14 h-14 bg-slate-100 rounded-md flex items-center justify-center text-slate-400 text-sm select-none">
+                        {/* Placeholder Logo */}
+                        Logo
+                    </div>
+                    <div>
+                        { settings.companyName ? <h1 className="text-2xl font-extrabold text-slate-900">{settings.companyName}</h1> : <div className="w-48 h-6 bg-slate-200 rounded animate-pulse"></div> }
+                        <p className="text-slate-500 whitespace-pre-line mt-1 text-sm leading-5">{settings.companyAddress}</p>
+                        <p className="text-slate-500 text-sm">{settings.companyContact}</p>
+                    </div>
                 </div>
                 <div className="text-right">
-                    <h2 className="text-4xl font-bold uppercase text-slate-400">Invoice</h2>
-                    <p className="text-slate-600 mt-2"># {invoiceNumber}</p>
+                    <h2 className="text-3xl font-bold uppercase text-slate-800">{settings.gstNumber ? 'Tax Invoice' : 'Invoice'}</h2>
+                    <p className="text-slate-600 mt-2 font-medium"># {invoiceNumber}</p>
+                    <div className="text-xs text-slate-600 mt-1">
+                        <p>Invoice Date: {formatDate(invoiceDate)}</p>
+                        <p>Due Date: {formatDate(dueDate)}</p>
+                        <p>Place of Supply: {placeOfSupply || 'N/A'}</p>
+                        {settings.gstNumber && <p className="mt-1">Agency GSTIN: {settings.gstNumber}</p>}
+                    </div>
                 </div>
               </div>
               
-              {/* Info section */}
-              <div className="flex justify-between mb-8 text-sm">
-                <div className="max-w-[50%]">
-                    <h4 className="font-semibold text-slate-500 mb-1">Billed To</h4>
+              {/* Recipient */}
+              <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
+                <div>
+                    <h4 className="font-semibold text-slate-600 mb-1">Billed To</h4>
                     {billedToDetails ? (
-                        <>
-                            <p className="font-bold text-slate-800">{billedToDetails.name}</p>
-                            <p className="text-slate-600 whitespace-pre-line">{billedToDetails.address}</p>
-                            <p className="text-slate-600">{billedToDetails.email}</p>
-                        </>
+                        <div className="space-y-0.5">
+                            <p className="font-semibold text-slate-900">{billedToDetails.name}</p>
+                            {billedToDetails.address && <p className="text-slate-700 whitespace-pre-line">{billedToDetails.address}</p>}
+                            {billedToDetails.email && <p className="text-slate-700">{billedToDetails.email}</p>}
+                            {billedToDetails.phone && <p className="text-slate-700">{billedToDetails.phone}</p>}
+                        </div>
                     ) : <p className="text-slate-400 italic">Select a customer</p>}
                 </div>
                 <div className="text-right">
-                    <p><span className="font-semibold text-slate-500">Invoice Date:</span> {formatDate(invoiceDate)}</p>
-                    <p><span className="font-semibold text-slate-500">Due Date:</span> {formatDate(dueDate)}</p>
-                    <p><span className="font-semibold text-slate-500">Place of Supply:</span> {placeOfSupply || 'N/A'}</p>
-                    {settings.gstNumber && <p className="mt-2"><span className="font-semibold text-slate-500">Agency GSTIN:</span> {settings.gstNumber}</p>}
+                    <h4 className="font-semibold text-slate-600 mb-1">Remit To</h4>
+                    <div className="text-slate-700 text-sm">
+                        <p>Bank: {settings.bankName}</p>
+                        <p>A/C No: {settings.accountNumber}</p>
+                        <p>IFSC: {settings.ifscCode}</p>
+                    </div>
                 </div>
               </div>
               
               {/* Items Table */}
-              <table className="w-full mb-8 text-sm">
-                <thead className="border-b-2 border-slate-700">
-                    <tr className="text-slate-600 uppercase">
-                        <th className="text-left p-2 font-semibold w-[50%]">Description</th>
+              <table className="w-full mb-8 text-sm border-collapse">
+                <thead>
+                    <tr className="bg-slate-100 text-slate-700 uppercase text-xs">
+                        <th className="text-left p-2 font-semibold">Item Description</th>
                         <th className="text-right p-2 font-semibold">Qty</th>
-                        <th className="text-right p-2 font-semibold">Rate</th>
-                        <th className="text-right p-2 font-semibold">Amount</th>
+                        <th className="text-right p-2 font-semibold">Unit Price</th>
+                        <th className="text-right p-2 font-semibold">Net Cost</th>
+                        <th className="text-right p-2 font-semibold">Tax %</th>
+                        <th className="text-right p-2 font-semibold">Gross Cost</th>
+                        <th className="text-right p-2 font-semibold">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {lineItems.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100">
+                    {lineItems.map((item, idx) => (
+                    <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="p-2 align-top">{item.description}</td>
                         <td className="text-right p-2 align-top">{item.quantity}</td>
                         <td className="text-right p-2 align-top">{formatCurrency(item.rate)}</td>
-                        <td className="text-right p-2 align-top">{formatCurrency(item.quantity * item.rate)}</td>
+                        <td className="text-right p-2 align-top">{formatCurrency(lineNet(item))}</td>
+                        <td className="text-right p-2 align-top">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>
+                        <td className="text-right p-2 align-top">{formatCurrency(lineGross(item))}</td>
+                        <td className="text-right p-2 align-top">{formatCurrency(lineGross(item))}</td>
                     </tr>
                     ))}
                 </tbody>
               </table>
 
-               {/* Totals */}
-               <div className="flex justify-end mb-8">
-                    <div className="w-full max-w-xs space-y-2 text-sm">
+               {/* Summary */}
+               <div className="flex justify-between gap-8 mb-8">
+                    <div className="text-xs text-slate-600 max-w-md">
+                        <h4 className="font-semibold text-slate-600 mb-1">Amount in Words:</h4>
+                        <p>{amountToWords(financialTotals.grandTotal)} Only.</p>
+                    </div>
+                    <div className="w-full max-w-sm space-y-2 text-sm">
                         <div className="flex justify-between text-slate-800">
                             <span>Subtotal</span>
                             <span>{formatCurrency(financialTotals.subtotal)}</span>
                         </div>
-                        
-                        {financialTotals.gstAmount > 0 && gstType === 'CGST/SGST' && (
-                            <>
-                                <div className="flex justify-between text-slate-800">
-                                    <span>CGST</span>
-                                    <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                </div>
-                                <div className="flex justify-between text-slate-800">
-                                    <span>SGST</span>
-                                    <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                </div>
-                            </>
+
+                        {financialTotals.gstAmount > 0 && (
+                          <div className="flex justify-between text-slate-800">
+                              <span>Taxes</span>
+                              <span>{formatCurrency(financialTotals.gstAmount)}</span>
+                          </div>
                         )}
 
-                        {financialTotals.gstAmount > 0 && gstType === 'IGST' && (
-                            <div className="flex justify-between text-slate-800">
-                                <span>IGST</span>
-                                <span>{formatCurrency(financialTotals.gstAmount)}</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between font-bold text-lg text-slate-900 border-t pt-2 mt-2">
+                        <div className="flex justify-between font-bold text-base text-slate-900 border-t pt-2 mt-2">
                             <span>Grand Total</span>
                             <span>{formatCurrency(financialTotals.grandTotal)}</span>
                         </div>
                     </div>
                </div>
-               <div className="text-xs text-slate-600 mt-4 mb-8">
-                    <span className="font-semibold">Amount in Words:</span> {amountToWords(financialTotals.grandTotal)} Only.
-               </div>
                
                {/* Footer */}
-               <div className="border-t-2 border-slate-200 pt-6 mt-12 text-xs text-slate-500 absolute bottom-10 left-10 right-10">
-                   <div className="grid grid-cols-2 gap-4">
+               <div className="border-t border-slate-200 pt-4 text-xs text-slate-600">
+                   <div className="grid grid-cols-2 gap-6">
                         <div>
-                            <h4 className="font-semibold text-slate-600 mb-1">Bank Details for Payment:</h4>
-                            <p className="text-slate-700">Bank: {settings.bankName}</p>
-                            <p className="text-slate-700">A/C No: {settings.accountNumber}</p>
-                            <p className="text-slate-700">IFSC: {settings.ifscCode}</p>
+                            <h4 className="font-semibold text-slate-600 mb-1">Company Info</h4>
+                            <p className="whitespace-pre-line">{settings.companyAddress}</p>
+                            <p>{settings.companyContact}</p>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-slate-600 mb-1">Notes & Terms:</h4>
+                            <h4 className="font-semibold text-slate-600 mb-1">Terms & Conditions</h4>
                             <p className="whitespace-pre-line">{notes}</p>
                         </div>
                    </div>
