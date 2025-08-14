@@ -1,13 +1,32 @@
 
 import React from 'react';
-import { DocketDeletionLog } from '../types';
+import { DocketDeletionLog, Docket } from '../types';
 import { formatDate } from '../services';
+import { supabase } from '../services';
+import { Modal } from './common';
+import { DocketForm } from './DocketForm';
 
 interface DeletedDocketsLogProps {
   logs: DocketDeletionLog[];
 }
 
 export const DeletedDocketsLog: React.FC<DeletedDocketsLogProps> = ({ logs }) => {
+  const [openId, setOpenId] = React.useState<string | null>(null);
+  const [docket, setDocket] = React.useState<Docket | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchDocket = async (id: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('dockets').select('*').eq('id', id).single();
+      if (!error && data) {
+        setDocket(data as unknown as Docket);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 md:p-8">
       <div className="max-w-6xl mx-auto">
@@ -27,7 +46,7 @@ export const DeletedDocketsLog: React.FC<DeletedDocketsLogProps> = ({ logs }) =>
               <tbody className="bg-white divide-y divide-slate-200">
                 {logs.length > 0 ? logs.map((log) => (
                   <tr key={log.docketId} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{log.docketId}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-700 underline cursor-pointer" onClick={() => { setOpenId(log.docketId); fetchDocket(log.docketId); }}>{log.docketId}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{log.clientName}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{log.deletedBy}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{new Date(log.deletedAt).toLocaleString()}</td>
@@ -42,6 +61,24 @@ export const DeletedDocketsLog: React.FC<DeletedDocketsLogProps> = ({ logs }) =>
             </table>
           </div>
         </div>
+        <Modal isOpen={!!openId} onClose={() => { setOpenId(null); setDocket(null); }} title="Read Only View – Deleted Docket" width="max-w-6xl">
+          {docket ? (
+            <DocketForm
+              docket={docket}
+              onSave={async () => {}}
+              onDelete={() => {}}
+              onClose={() => { setOpenId(null); setDocket(null); }}
+              suppliers={[]}
+              saveSupplier={() => {}}
+              agents={[]}
+              loading={loading}
+              forceReadOnly
+              readOnlyBanner="Read Only View – Deleted Docket"
+            />
+          ) : (
+            <div className="p-6 text-slate-600">Loading docket details…</div>
+          )}
+        </Modal>
       </div>
     </div>
   );

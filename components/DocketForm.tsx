@@ -17,6 +17,8 @@ interface DocketFormProps {
   saveSupplier: (supplier: Omit<Supplier, 'id'>) => void;
   agents: Agent[];
   loading: boolean;
+  forceReadOnly?: boolean;
+  readOnlyBanner?: string;
 }
 
 const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon, children, defaultOpen = true }) => (
@@ -134,7 +136,7 @@ const AddPaxToFlightModalContent: React.FC<{
 
 
 // --- MAIN DOCKET FORM COMPONENT ---
-export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete, onClose, suppliers, saveSupplier, agents, loading: isSaving }) => {
+export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete, onClose, suppliers, saveSupplier, agents, loading: isSaving, forceReadOnly, readOnlyBanner }) => {
     const { currentUser } = useAuth();
     const [formState, setFormState] = useState<Omit<Docket, 'id' | 'searchTags' | 'createdAt' | 'updatedAt'>>(INITIAL_DOCKET_FORM_STATE);
     const [activeTab, setActiveTab] = useState('details');
@@ -151,10 +153,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
     const notificationTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     
-    const isReadOnly = useMemo(() => {
+    const computedReadOnly = useMemo(() => {
         if (!docket || !currentUser) return false; // New dockets are always editable
         return currentUser.role !== 'admin' && docket.createdBy !== currentUser.id;
     }, [docket, currentUser]);
+    const isReadOnly = forceReadOnly ? true : computedReadOnly;
 
     useEffect(() => {
         if (docket) {
@@ -1016,30 +1019,46 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
                 </div>
             </div>
 
-            <div className="lg:w-1/3 bg-white p-6 border-l border-slate-200"><div className="sticky top-20"><div className="space-y-6"><div className="bg-slate-50 p-4 rounded-lg shadow-sm"><h3 className="font-semibold mb-3">Docket Control</h3><div className="space-y-4"><FormSelect label="Booking Status" value={formState.status} onChange={e => setFormState(p => ({...p, status: e.target.value as BookingStatus}))} disabled={isReadOnly}>{Object.values(BookingStatus).map(s => <option key={s} value={s}>{s}</option>)}</FormSelect><FormSelect label="Tag" value={formState.tag} onChange={e => setFormState(p => ({...p, tag: e.target.value as Tag}))} disabled={isReadOnly}>{Object.values(Tag).map(t => <option key={t} value={t}>{t}</option>)}</FormSelect></div></div>
-            <div className="bg-slate-50 p-4 rounded-lg shadow-sm">
-                <h3 className="font-semibold mb-3">Actions</h3>
-                <button onClick={() => setInvoiceModalOpen(true)} disabled={!docket?.id || isReadOnly} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed">Generate Invoice</button>
-                {formState.invoices && formState.invoices.length > 0 && (
-                    <div className="mt-4 pt-4 border-t">
-                        <h4 className="font-semibold text-sm mb-2 text-slate-600">Generated Invoices</h4>
-                        <div className="space-y-2">
-                            {[...formState.invoices].reverse().map(inv => (
-                                <div key={inv.id} className="flex justify-between items-center bg-white p-2 rounded-md border">
-                                    <div>
-                                        <p className="font-semibold text-sm text-slate-800">{inv.invoiceNumber}</p>
-                                        <p className="text-xs text-slate-500">{formatDate(inv.date)} - {formatCurrency(inv.grandTotal)}</p>
-                                    </div>
-                                    <button onClick={() => setPreviewInvoice(inv)} className="px-3 py-1 text-xs bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300">
-                                        Preview
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200"><h3 className="font-semibold mb-3 text-blue-800">Financial Summary</h3><div className="space-y-2 text-sm">{Object.entries(summaryItems).map(([key, value]) => (<div key={key} className="flex justify-between items-center"><span className="capitalize text-slate-600">{key}</span><div className="text-right"><p className="font-semibold text-slate-800">{formatCurrency(value.grossBilled)} <span className={`text-xs ${value.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>({formatCurrency(value.profit)})</span></p></div></div>))}<div className="pt-2 border-t mt-2"><div className="flex justify-between font-bold"><span className="text-slate-700">Grand Total</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalGross)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Total Net</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalNet)}</span></div><div className="flex justify-between font-bold text-green-700"><span >Total Profit</span><span>{formatCurrency(financialSummary.grandTotalProfit)}</span></div></div><div className="pt-2 border-t mt-2"><div className="flex justify-between"><span className="text-slate-700">Amount Paid</span><span className="text-green-700 font-semibold">{formatCurrency(financialSummary.amountPaid)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Balance Due</span><span className="text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span></div></div></div></div><div className="space-y-4"><button onClick={handleSaveClick} disabled={isSaving || isReadOnly} className="w-full flex justify-center items-center bg-brand-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-slate-400">{isSaving ? <Spinner size="sm" /> : (docket ? 'Save Changes' : 'Create Docket')}</button>{docket && (<div className="p-4 border border-red-200 rounded-lg bg-red-50"><h3 className="font-semibold text-red-800">Danger Zone</h3><p className="text-sm text-red-600 my-2">Deleting a docket is permanent and cannot be undone.</p><button onClick={() => setDeleteModalOpen(true)} disabled={isReadOnly} className="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 disabled:bg-slate-400">Delete Docket</button></div>)}</div></div></div></div>
+            <div className="lg:w-1/3 bg-white p-6 border-l border-slate-200"><div className="sticky top-20"><div className="space-y-6">
+            {forceReadOnly && (
+              <div className="p-3 rounded bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold">
+                {readOnlyBanner || 'Read Only View – Deleted Docket'}
+              </div>
+            )}
+            <div className="bg-slate-50 p-4 rounded-lg shadow-sm"><h3 className="font-semibold mb-3">Docket Control</h3><div className="space-y-4"><FormSelect label="Booking Status" value={formState.status} onChange={e => setFormState(p => ({...p, status: e.target.value as BookingStatus}))} disabled={isReadOnly}>{Object.values(BookingStatus).map(s => <option key={s} value={s}>{s}</option>)}</FormSelect><FormSelect label="Tag" value={formState.tag} onChange={e => setFormState(p => ({...p, tag: e.target.value as Tag}))} disabled={isReadOnly}>{Object.values(Tag).map(t => <option key={t} value={t}>{t}</option>)}</FormSelect></div></div>
+            {!isReadOnly && (
+              <div className="bg-slate-50 p-4 rounded-lg shadow-sm">
+                  <h3 className="font-semibold mb-3">Actions</h3>
+                  <button onClick={() => setInvoiceModalOpen(true)} disabled={!docket?.id} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed">Generate Invoice</button>
+                  {formState.invoices && formState.invoices.length > 0 && (
+                      <div className="mt-4 pt-4 border-t">
+                          <h4 className="font-semibold text-sm mb-2 text-slate-600">Generated Invoices</h4>
+                          <div className="space-y-2">
+                              {[...formState.invoices].reverse().map(inv => (
+                                  <div key={inv.id} className="flex justify-between items-center bg-white p-2 rounded-md border">
+                                      <div>
+                                          <p className="font-semibold text-sm text-slate-800">{inv.invoiceNumber}</p>
+                                          <p className="text-xs text-slate-500">{formatDate(inv.date)} - {formatCurrency(inv.grandTotal)}</p>
+                                      </div>
+                                      <button onClick={() => setPreviewInvoice(inv)} className="px-3 py-1 text-xs bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300">
+                                          Preview
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+              </div>
+            )}
+            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200"><h3 className="font-semibold mb-3 text-blue-800">Financial Summary</h3><div className="space-y-2 text-sm">{Object.entries(summaryItems).map(([key, value]) => (<div key={key} className="flex justify-between items-center"><span className="capitalize text-slate-600">{key}</span><div className="text-right"><p className="font-semibold text-slate-800">{formatCurrency(value.grossBilled)} <span className={`text-xs ${value.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>({formatCurrency(value.profit)})</span></p></div></div>))}<div className="pt-2 border-t mt-2"><div className="flex justify-between font-bold"><span className="text-slate-700">Grand Total</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalGross)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Total Net</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalNet)}</span></div><div className="flex justify-between font-bold text-green-700"><span >Total Profit</span><span>{formatCurrency(financialSummary.grandTotalProfit)}</span></div></div><div className="pt-2 border-t mt-2"><div className="flex justify-between"><span className="text-slate-700">Amount Paid</span><span className="text-green-700 font-semibold">{formatCurrency(financialSummary.amountPaid)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Balance Due</span><span className="text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span></div></div></div></div><div className="space-y-4">{!isReadOnly ? (
+              <button onClick={handleSaveClick} disabled={isSaving} className="w-full flex justify-center items-center bg-brand-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-slate-400">{isSaving ? <Spinner size="sm" /> : (docket ? 'Save Changes' : 'Create Docket')}</button>
+            ) : (
+              <button onClick={onClose} className="w-full flex justify-center items-center bg-slate-200 text-slate-800 font-bold py-3 px-4 rounded-lg">Close</button>
+            )}
+            {!isReadOnly && docket && (
+              <div className="p-4 border border-red-200 rounded-lg bg-red-50"><h3 className="font-semibold text-red-800">Danger Zone</h3><p className="text-sm text-red-600 my-2">Deleting a docket is permanent and cannot be undone.</p><button onClick={() => setDeleteModalOpen(true)} className="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700">Delete Docket</button></div>
+            )}
+            </div></div></div></div>
         </div>
 
         <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Confirm Deletion"><p className="mb-4">Are you sure you want to delete this docket? This action cannot be undone. Please provide a reason for deletion.</p><FormTextarea label="Reason" value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Reason for deletion..." className="mb-4"></FormTextarea><div className="flex justify-end gap-3"><button onClick={() => setDeleteModalOpen(false)} className="px-4 py-2 bg-slate-200 rounded-md">Cancel</button><button onClick={handleDeleteClick} disabled={!deleteReason} className="px-4 py-2 bg-red-600 text-white rounded-md disabled:bg-red-300">Delete</button></div></Modal>
