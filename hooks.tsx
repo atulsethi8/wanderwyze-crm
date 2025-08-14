@@ -314,8 +314,12 @@ export const useDockets = () => {
         });
         return returnedDocket.id;
     } catch (error: any) {
-        console.error("Error saving docket:", error.message);
-        throw error;
+        const message = error?.message || 'Unknown error';
+        const details = error?.details || error?.hint || '';
+        const code = error?.code ? ` [${error.code}]` : '';
+        const composed = `${message}${code}${details ? ` | ${details}` : ''}`;
+        console.error("Error saving docket:", error);
+        throw new Error(composed);
     } finally {
         setLoading(false);
     }

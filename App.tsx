@@ -112,9 +112,9 @@ const AppContent: React.FC = () => {
                 // If we just created a new docket, we stay on the form page to continue editing.
                 // The URL is already correct from handleNewDocket.
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving docket from App.tsx:", error);
-            alert("Failed to save docket. Please check your connection and try again.");
+            alert(`Failed to save docket: ${error?.message || 'Unknown error'}`);
         }
     };
 
