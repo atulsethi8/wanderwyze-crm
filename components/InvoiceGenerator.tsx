@@ -387,11 +387,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
             <div id="invoice-preview" className="bg-white shadow-lg p-10 mx-auto" style={{width: '210mm', minHeight: '297mm'}}>
               {/* Header */}
               <div className="flex justify-between items-start pb-6 mb-8 border-b-2 border-slate-200">
-                <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 bg-slate-100 rounded-md flex items-center justify-center text-slate-400 text-sm select-none">
-                        {/* Placeholder Logo */}
-                        Logo
-                    </div>
+                <div className="flex items-start">
                     <div>
                         { settings.companyName ? <h1 className="text-2xl font-extrabold text-slate-900">{settings.companyName}</h1> : <div className="w-48 h-6 bg-slate-200 rounded animate-pulse"></div> }
                         <p className="text-slate-500 whitespace-pre-line mt-1 text-sm leading-5">{settings.companyAddress}</p>
