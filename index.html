@@ -42,7 +42,36 @@
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #0f172a; /* slate-900 */
+    --muted: #f1f5f9; /* slate-100 */
+    --muted-fg: #475569; /* slate-600 */
+    --border: #e2e8f0; /* slate-200 */
+    --brand-on: #ffffff;
+    --brand-hover: #1d4ed8; /* blue-700 */
+  }
+  :root[data-theme='dark'] {
+    --bg: #121212;
+    --fg: #f8fafc; /* slate-50 */
+    --muted: #1f2937; /* gray-800 */
+    --muted-fg: #cbd5e1; /* slate-300 */
+    --border: #334155; /* slate-700 */
+    --brand-on: #ffffff;
+    --brand-hover: #1d4ed8;
+  }
+  .var-bg { background-color: var(--bg); }
+  .text-fg { color: var(--fg); }
+  .text-muted { color: var(--muted-fg); }
+  .text-muted-fg { color: var(--muted-fg); }
+  .ring-border { box-shadow: 0 0 0 1px var(--border) inset; }
+  .bg-muted { background-color: var(--muted); }
+  .var-btn { background-color: var(--muted); color: var(--fg); border: 1px solid var(--border); }
+  .text-on-brand { color: var(--brand-on); }
+  .hover\:bg-brand-hover:hover { background-color: var(--brand-hover); }
+</style>
+<body class="var-bg text-fg">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
