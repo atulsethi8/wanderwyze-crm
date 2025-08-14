@@ -61,7 +61,7 @@ API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 
 
 const AppContent: React.FC = () => {
-    const { currentUser, loading: authLoading } = useAuth();
+    const { currentUser, loading: authLoading, hasSession } = useAuth();
     const { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, users, updateUserRole, deletionLog, loading: docketsLoading } = useDockets();
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedDocketId, setSelectedDocketId] = useState<string | null>(null);
@@ -142,7 +142,6 @@ const AppContent: React.FC = () => {
             return <PasswordResetPage />;
         }
         // If there is a session, show a spinner instead of login until profile resolves
-        const { hasSession } = useAuth();
         if (hasSession) {
             return (
                 <div className="h-screen w-screen flex justify-center items-center">
