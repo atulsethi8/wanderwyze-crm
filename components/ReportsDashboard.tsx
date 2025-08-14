@@ -197,18 +197,19 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
             const sum = docketsByAgentDest.reduce((acc, d) => {
               const { grossBilled, netCost } = calculateDocketTotals(d);
               const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-              acc.gross += grossBilled; acc.net += netCost; acc.paid += paid; acc.balance += Math.max(0, grossBilled - paid); return acc;
-            }, {gross:0, net:0, paid:0, balance:0});
+              acc.gross += grossBilled; acc.net += netCost; acc.paid += paid; acc.balance += Math.max(0, grossBilled - paid); acc.profit += (grossBilled - netCost); return acc;
+            }, {gross:0, net:0, paid:0, balance:0, profit:0});
             const agentName = agentFilter === 'all' ? 'All' : (agents.find(a => a.id === agentFilter)?.name || 'Unknown');
             const destName = destinationFilter === 'all' ? 'All' : destinationFilter;
             return (
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Agent</p><p className="text-sm font-semibold text-slate-800">{agentName}</p></div>
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Destination</p><p className="text-sm font-semibold text-slate-800">{destName}</p></div>
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Billed</p><p className="text-sm font-semibold">{formatCurrency(sum.gross)}</p></div>
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Net</p><p className="text-sm font-semibold">{formatCurrency(sum.net)}</p></div>
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Amount Paid</p><p className="text-sm font-semibold">{formatCurrency(sum.paid)}</p></div>
                 <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Balance Due</p><p className="text-sm font-semibold">{formatCurrency(sum.balance)}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Profit</p><p className="text-sm font-semibold">{formatCurrency(sum.profit)}</p></div>
               </div>
             )
           })()}
