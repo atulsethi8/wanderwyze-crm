@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent } from '../types';
 import { INITIAL_DOCKET_FORM_STATE, LEAD_SOURCES } from '../constants';
@@ -711,6 +707,101 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         </div>
     );
 
+    // New: Handler to upload an e-ticket from the Passengers tab.
+    // This will auto-fill the passenger list and create a new flight from the ticket details.
+    const handlePassengerTabTicketUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setAiLoading(true);
+        try {
+            const base64 = await toBase64(file);
+            const uploadedFile: Omit<UploadedFile, 'id'> = { name: file.name, type: file.type, size: file.size, content: base64 };
+            const prompt = "From this e-ticket, extract passenger full names and the primary flight segment details. Ensure dates are YYYY-MM-DD and times HH:MM (24h).";
+            const schema = {
+                type: Type.OBJECT, properties: {
+                    passengers: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { fullName: { type: Type.STRING } } } },
+                    flight: { type: Type.OBJECT, properties: {
+                        airline: { type: Type.STRING },
+                        pnr: { type: Type.STRING },
+                        flightNumber: { type: Type.STRING },
+                        departureDate: { type: Type.STRING },
+                        departureTime: { type: Type.STRING },
+                        arrivalDate: { type: Type.STRING },
+                        arrivalTime: { type: Type.STRING },
+                        departureAirport: { type: Type.STRING },
+                        arrivalAirport: { type: Type.STRING }
+                    } }
+                }
+            };
+
+            const extractedData = await geminiService.extractDataFromDocument(base64, file.type, schema, prompt);
+            if (extractedData && extractedData.flight) {
+                setFormState(prev => {
+                    const { passengers: extractedPassengers, flight: extractedFlight } = extractedData;
+                    // Merge passengers
+                    const existingNames = new Set(prev.passengers.map(p => p.fullName.toLowerCase().trim()));
+                    const newUniquePassengers: Passenger[] = (extractedPassengers || [])
+                        .filter((p: { fullName: string }) => p.fullName && !existingNames.has(p.fullName.toLowerCase().trim()))
+                        .map((p: { fullName: string }): Passenger => ({
+                            id: `PAX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            fullName: p.fullName.trim(),
+                            type: PassengerType.Adult,
+                            gender: Gender.Male
+                        }));
+                    const updatedGlobalPassengers = [...prev.passengers, ...newUniquePassengers];
+                    const extractedPassengerNames = new Set((extractedPassengers || []).map((p: { fullName: string }) => p.fullName.toLowerCase().trim()));
+                    const passengerIdsForThisFlight = updatedGlobalPassengers
+                        .filter(p => extractedPassengerNames.has(p.fullName.toLowerCase().trim()))
+                        .map(p => p.id);
+
+                    // Create a new flight entry populated from the ticket
+                    const newFlightId = `FL-${Date.now()}`;
+                    const newFlight: Flight = {
+                        id: newFlightId,
+                        airline: extractedFlight.airline || '',
+                        pnr: extractedFlight.pnr || '',
+                        bookingId: '',
+                        flightNumber: extractedFlight.flightNumber || '',
+                        departureDate: extractedFlight.departureDate || '',
+                        departureTime: extractedFlight.departureTime || '',
+                        arrivalDate: extractedFlight.arrivalDate || '',
+                        arrivalTime: extractedFlight.arrivalTime || '',
+                        departureAirport: extractedFlight.departureAirport || '',
+                        arrivalAirport: extractedFlight.arrivalAirport || '',
+                        supplier: null,
+                        isNetGrossSameForAll: true,
+                        commonNetCost: 0,
+                        commonGrossBilled: 0,
+                        passengerDetails: passengerIdsForThisFlight.map(paxId => ({
+                            passengerId: paxId,
+                            passengerType: updatedGlobalPassengers.find(p => p.id === paxId)!.type,
+                            netCost: 0,
+                            grossBilled: 0
+                        }))
+                    };
+
+                    const fileToAdd: UploadedFile = { ...uploadedFile, id: `FILE-${Date.now()}`, linkedItemId: newFlightId, linkedItemType: 'flight' };
+
+                    return {
+                        ...prev,
+                        passengers: updatedGlobalPassengers,
+                        itinerary: { ...prev.itinerary, flights: [...prev.itinerary.flights, newFlight] },
+                        files: [...prev.files, fileToAdd]
+                    };
+                });
+            } else {
+                console.warn("AI did not return flight data from the document (Passengers tab upload).");
+                alert("Could not detect flight details from the e-ticket. Please try another file or fill manually.");
+            }
+        } catch (error) {
+            console.error("AI parsing error in Passengers tab:", error);
+            alert("Failed to parse e-ticket. Please check the file and try again.");
+        } finally {
+            setAiLoading(false);
+            e.target.value = '';
+        }
+    };
+
     return (
     <>
         {showSaveSuccess && (
@@ -750,6 +841,10 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
                      <Section title="Passengers" icon={Icons.user}>
                         <div className="flex items-center gap-4 mb-4">
                             <button onClick={addPassenger} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Passenger</button>
+                            <label htmlFor="pax-ticket-upload" className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>
+                                {Icons.ai} Upload E‑Ticket & Autofill
+                            </label>
+                            <input id="pax-ticket-upload" type="file" className="hidden" onChange={handlePassengerTabTicketUpload} accept="image/*,application/pdf" disabled={isReadOnly} />
                         </div>
                         <div className="space-y-3">{formState.passengers.map((pax, index) => (
                             <details key={pax.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
