@@ -585,7 +585,10 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const handleSaveClick = async () => {
         let stateToSave = { ...formState };
         const newSystemLogs: Comment[] = [];
-        const timestamp = new Date().toISOString();
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
     
         const getFlightTotals = (flight: Flight) => {
             return flight.passengerDetails.reduce((acc, pd) => {
@@ -595,70 +598,46 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             }, { netCost: 0, grossBilled: 0 });
         };
 
-        if (docket) { // This is an update, so we can compare
-            // 1. Check for status change to "Confirmed"
-            if (docket.status !== BookingStatus.Confirmed && stateToSave.status === BookingStatus.Confirmed) {
-                const summary = financialSummary; // Use existing memoized calculation
-                const logText = `🔒 Auto-log: Financial Summary at Confirmation
-- Flight - Net: ${formatCurrency(summary.flights.netCost)}, Gross: ${formatCurrency(summary.flights.grossBilled)}
-- Hotel - Net: ${formatCurrency(summary.hotels.netCost)}, Gross: ${formatCurrency(summary.hotels.grossBilled)}
-- Transfers - Net: ${formatCurrency(summary.transfers.netCost)}, Gross: ${formatCurrency(summary.transfers.grossBilled)}
-- Excursions - Net: ${formatCurrency(summary.excursions.netCost)}, Gross: ${formatCurrency(summary.excursions.grossBilled)}`;
-                
+        // Build per-type totals from current form state
+        const totals = {
+            flights: stateToSave.itinerary.flights.reduce((acc, f) => {
+                const t = getFlightTotals(f);
+                acc.netCost += t.netCost;
+                acc.grossBilled += t.grossBilled;
+                return acc;
+            }, { netCost: 0, grossBilled: 0 }),
+            hotels: stateToSave.itinerary.hotels.reduce((acc, h) => ({ netCost: acc.netCost + (h.netCost || 0), grossBilled: acc.grossBilled + (h.grossBilled || 0) }), { netCost: 0, grossBilled: 0 }),
+            transfers: stateToSave.itinerary.transfers.reduce((acc, t) => ({ netCost: acc.netCost + (t.netCost || 0), grossBilled: acc.grossBilled + (t.grossBilled || 0) }), { netCost: 0, grossBilled: 0 }),
+            excursions: stateToSave.itinerary.excursions.reduce((acc, e) => ({ netCost: acc.netCost + (e.netCost || 0), grossBilled: acc.grossBilled + (e.grossBilled || 0) }), { netCost: 0, grossBilled: 0 })
+        };
+
+        const pushTypeLogIfAny = (label: 'Flight' | 'Hotel' | 'Transfers' | 'Excursions', net: number, gross: number) => {
+            if ((net || 0) > 0 || (gross || 0) > 0) {
                 newSystemLogs.push({
-                    id: `SYS-CONF-${Date.now()}`,
-                    text: logText,
-                    timestamp,
+                    id: `SYS-COST-${label}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+                    text: `${ts} – Net Cost: ${rupee(net)}, Gross Cost: ${rupee(gross)} – ${label}`,
+                    timestamp: now.toISOString(),
                     author: 'System',
-                    isSystem: true,
+                    isSystem: true
                 });
             }
-    
-            // 2. Check for financial value modifications
-            const changeLogParts: string[] = [];
-            const compareAndLog = (type: string, name: string, oldNet: number, newNet: number, oldGross: number, newGross: number) => {
-                if (oldNet !== newNet || oldGross !== newGross) {
-                    changeLogParts.push(
-                        `${type} (${name}) updated: Net: ${formatCurrency(oldNet)} → ${formatCurrency(newNet)}, Gross: ${formatCurrency(oldGross)} → ${formatCurrency(newGross)}`
-                    );
-                }
-            };
-    
-            // Compare Flights
-            stateToSave.itinerary.flights.forEach(newFlight => {
-                const oldFlight = docket.itinerary.flights.find(f => f.id === newFlight.id);
-                if (oldFlight) {
-                    const oldTotals = getFlightTotals(oldFlight);
-                    const newTotals = getFlightTotals(newFlight);
-                    compareAndLog('Flight', `${newFlight.airline} ${newFlight.pnr || ''}`, oldTotals.netCost, newTotals.netCost, oldTotals.grossBilled, newTotals.grossBilled);
-                }
-            });
-    
-            // Compare Hotels, Excursions, Transfers
-            (['hotels', 'excursions', 'transfers'] as const).forEach(category => {
-                stateToSave.itinerary[category].forEach(newItem => {
-                    const oldItem = (docket.itinerary[category] as any[]).find(item => item.id === newItem.id);
-                    if (oldItem) {
-                        const typeName = category.charAt(0).toUpperCase() + category.slice(1, -1);
-                        const itemName = (newItem as any).name || (newItem as any).provider;
-                        compareAndLog(typeName, itemName, oldItem.netCost, newItem.netCost, oldItem.grossBilled, newItem.grossBilled);
-                    }
-                });
-            });
-    
-            if (changeLogParts.length > 0) {
-                const logText = `🔒 Auto-log: Financial values updated\n- ${changeLogParts.join('\n- ')}`;
-                newSystemLogs.push({
-                    id: `SYS-UPD-${Date.now()}`,
-                    text: logText,
-                    timestamp,
-                    author: 'System',
-                    isSystem: true,
-                });
-            }
+        };
+
+        // Always log current per-type costs on save
+        pushTypeLogIfAny('Flight', totals.flights.netCost, totals.flights.grossBilled);
+        pushTypeLogIfAny('Hotel', totals.hotels.netCost, totals.hotels.grossBilled);
+        pushTypeLogIfAny('Transfers', totals.transfers.netCost, totals.transfers.grossBilled);
+        pushTypeLogIfAny('Excursions', totals.excursions.netCost, totals.excursions.grossBilled);
+
+        // Additionally, if status moved to Confirmed, log again (separate entries)
+        if (docket && docket.status !== BookingStatus.Confirmed && stateToSave.status === BookingStatus.Confirmed) {
+            pushTypeLogIfAny('Flight', totals.flights.netCost, totals.flights.grossBilled);
+            pushTypeLogIfAny('Hotel', totals.hotels.netCost, totals.hotels.grossBilled);
+            pushTypeLogIfAny('Transfers', totals.transfers.netCost, totals.transfers.grossBilled);
+            pushTypeLogIfAny('Excursions', totals.excursions.netCost, totals.excursions.grossBilled);
         }
     
-        // If there are new logs, add them to the state that will be saved
+        // If there are new logs, add them to the state that will be saved (prepend to keep latest on top)
         if (newSystemLogs.length > 0) {
             stateToSave = {
                 ...stateToSave,
