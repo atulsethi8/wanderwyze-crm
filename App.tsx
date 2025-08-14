@@ -141,6 +141,15 @@ const AppContent: React.FC = () => {
         if (hash.startsWith('reset-password')) {
             return <PasswordResetPage />;
         }
+        // If there is a session, show a spinner instead of login until profile resolves
+        const { hasSession } = useAuth();
+        if (hasSession) {
+            return (
+                <div className="h-screen w-screen flex justify-center items-center">
+                    <Spinner size="lg" />
+                </div>
+            );
+        }
         return <LoginPage />;
     }
 

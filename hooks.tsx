@@ -49,6 +49,7 @@ const mapDbAgentToAppAgent = (dbAgent: any): Agent => {
 interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
+  hasSession: boolean;
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   sendPasswordReset: (email: string) => Promise<any>;
@@ -60,6 +61,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -71,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const sessionPromise = supabaseService.getSession();
         const { user } = await Promise.race([sessionPromise, timeout]);
         if (!isMounted) return;
+        if (user) setHasSession(true);
         setCurrentUser(user);
       } catch (error) {
         console.error('Error getting initial session:', error);
@@ -87,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         try {
             if (session?.user) {
+                setHasSession(true);
                 const profile = await supabaseService.getUserProfile(session.user);
                 setCurrentUser(profile);
             }
@@ -113,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error);
       }
       if (user) {
+        setHasSession(true);
         setCurrentUser(user);
       }
     } finally {
@@ -122,6 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     await supabaseService.signOut();
+    setHasSession(false);
     setCurrentUser(null);
   };
   
@@ -135,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
      if (error) throw new Error(error);
   };
 
-  const value = { currentUser, loading, login, logout, sendPasswordReset, updatePassword };
+  const value = { currentUser, loading, hasSession, login, logout, sendPasswordReset, updatePassword };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
