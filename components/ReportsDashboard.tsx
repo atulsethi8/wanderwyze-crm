@@ -32,6 +32,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     end: new Date().toISOString().split('T')[0],
   });
   const [filterType, setFilterType] = useState<'creation' | 'departure'>('departure');
+  const [agentFilter, setAgentFilter] = useState<string>('all');
 
   const docketsForReporting = useMemo(() => {
     if (currentUser?.role === 'admin') {
@@ -105,6 +106,11 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     return Object.values(data).filter(d => d.bookings > 0).sort((a,b) => b.sales - a.sales);
   }, [filteredDockets, agents]);
 
+  const docketsByAgent = useMemo(() => {
+    const list = filteredDockets.filter(d => agentFilter === 'all' ? true : d.agentId === agentFilter);
+    return list;
+  }, [filteredDockets, agentFilter]);
+
   const handleOpen = (id: string) => onOpenDocket(id);
 
   return (
@@ -152,34 +158,57 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
             />
         </div>
         
-        {/* Agent Performance Table */}
+        {/* Agent Performance - Dockets List with filter */}
         <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-slate-700">Agent Performance</h2>
-             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                    <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Bookings</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Sales</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Profit</th>
-                    </tr>
-                </thead>
-                 <tbody className="bg-white divide-y divide-slate-200">
-                     {agentPerformanceData.map(agent => (
-                         <tr key={agent.name}>
-                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-800">{agent.name}</td>
-                             <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">{agent.bookings}</td>
-                             <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600 font-semibold">{formatCurrency(agent.sales)}</td>
-                             <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold" style={{color: agent.profit >= 0 ? 'green' : 'red'}}>{formatCurrency(agent.profit)}</td>
-                         </tr>
-                     ))}
-                      {agentPerformanceData.length === 0 && (
-                        <tr><td colSpan={4} className="text-center py-4 text-slate-500">No agent data for this period.</td></tr>
-                      )}
-                 </tbody>
-              </table>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-700">Agent Performance</h2>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-slate-600">Agent:</label>
+              <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
+                <option value="all">All</option>
+                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
             </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-200">
+                {(() => {
+                  let totalProfitAgent = 0;
+                  const rows = docketsByAgent.map(d => {
+                    const { grossBilled, netCost } = calculateDocketTotals(d);
+                    const profit = grossBilled - netCost;
+                    totalProfitAgent += profit;
+                    const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
+                    return (
+                      <tr key={d.id}>
+                        <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.id}</button></td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
+                        <td className={`px-4 py-3 text-sm font-semibold ${profit>=0?'text-green-600':'text-red-600'}`}>{formatCurrency(profit)}</td>
+                      </tr>
+                    );
+                  });
+                  rows.push(
+                    <tr key="agent-totals" className="bg-slate-50 font-semibold">
+                      <td className="px-4 py-3" colSpan={2}>Total Profit</td>
+                      <td className="px-4 py-3">{formatCurrency(totalProfitAgent)}</td>
+                    </tr>
+                  );
+                  return rows;
+                })()}
+                {docketsByAgent.length === 0 && (
+                  <tr><td colSpan={3} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Dockets List */}
@@ -207,7 +236,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             const { grossBilled } = calculateDocketTotals(d);
                             return grossBilled - paid > 0;
                           });
-                          let totalGross = 0; let totalNet = 0; let totalProfit = 0; let totalOutstanding = 0;
+                          let totalProfit = 0;
                           const rendered = rows.map(docket => {
                             const { grossBilled, netCost } = calculateDocketTotals(docket);
                             const profit = grossBilled - netCost;
@@ -216,7 +245,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             const agentName = docket.agentId ? agents.find(a => a.id === docket.agentId)?.name : 'N/A';
                             const paid = (docket.payments || []).reduce((s,p) => s + (p.amount||0), 0);
                             const outstanding = Math.max(0, grossBilled - paid);
-                            totalGross += grossBilled; totalNet += netCost; totalProfit += profit; totalOutstanding += outstanding;
+                            totalProfit += profit;
                             
                             return (
                                 <tr key={docket.id} className="hover:bg-slate-50">
@@ -239,11 +268,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                           // Append totals row
                           rendered.push(
                             <tr key="totals" className="bg-slate-50 font-semibold">
-                              <td className="px-6 py-3" colSpan={4}>Totals</td>
-                              <td className="px-6 py-3">{formatCurrency(totalGross)}</td>
-                              <td className="px-6 py-3">{formatCurrency(totalNet)}</td>
+                              <td className="px-6 py-3" colSpan={6}>Total Profit</td>
                               <td className="px-6 py-3">{formatCurrency(totalProfit)}</td>
-                              <td className="px-6 py-3">{formatCurrency(totalOutstanding)}</td>
                               <td className="px-6 py-3"></td>
                             </tr>
                           );
