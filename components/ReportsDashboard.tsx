@@ -8,6 +8,7 @@ import { useAuth } from '../hooks';
 interface ReportsDashboardProps {
   dockets: Docket[];
   agents: Agent[];
+  onOpenDocket: (id: string) => void;
 }
 
 const calculateDocketTotals = (docket: Docket) => {
@@ -24,13 +25,12 @@ const calculateDocketTotals = (docket: Docket) => {
     }), { grossBilled: 0, netCost: 0 });
 };
 
-export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents }) => {
+export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents, onOpenDocket }) => {
   const { currentUser } = useAuth();
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
   });
-  const [expandedDocketId, setExpandedDocketId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'creation' | 'departure'>('departure');
 
   const docketsForReporting = useMemo(() => {
@@ -105,9 +105,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     return Object.values(data).filter(d => d.bookings > 0).sort((a,b) => b.sales - a.sales);
   }, [filteredDockets, agents]);
 
-  const handleToggleDocket = (id: string) => {
-    setExpandedDocketId(prevId => (prevId === id ? null : id));
-  };
+  const handleOpen = (id: string) => onOpenDocket(id);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 bg-slate-100 min-h-full">
@@ -198,7 +196,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Gross</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Net</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Details</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
@@ -210,46 +208,20 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             const agentName = docket.agentId ? agents.find(a => a.id === docket.agentId)?.name : 'N/A';
                             
                             return (
-                                <React.Fragment key={docket.id}>
-                                    <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => handleToggleDocket(docket.id)}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.client.name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{agentName}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{mainDestination}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatDate(departureDate)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(grossBilled)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(netCost)}</td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className={`transform transition-transform duration-200 inline-block ${expandedDocketId === docket.id ? 'rotate-180' : ''}`}>
-                                                {React.cloneElement(Icons.chevronDown, { className: 'h-5 w-5' })}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    {expandedDocketId === docket.id && (
-                                        <tr>
-                                            <td colSpan={8} className="p-4 bg-slate-100">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
-                                                    <div>
-                                                        <h4 className="font-semibold text-slate-700 mb-2">Destinations</h4>
-                                                        <ul className="list-disc list-inside text-sm text-slate-600">
-                                                          {docket.itinerary.hotels.map(h => <li key={h.id}>{h.name} ({formatDate(h.checkIn)} - {formatDate(h.checkOut)})</li>)}
-                                                          {docket.itinerary.flights.map(f => <li key={f.id}>{f.arrivalAirport} ({formatDate(f.departureDate)})</li>)}
-                                                        </ul>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-semibold text-slate-700 mb-2">Supplier Breakdown (Net Cost)</h4>
-                                                        <div className="text-sm text-slate-600 space-y-1">
-                                                            <p><strong>Flights:</strong> {formatCurrency(docket.itinerary.flights.reduce((sum, f) => sum + f.passengerDetails.reduce((paxSum, pd) => paxSum + pd.netCost, 0), 0))}</p>
-                                                            <p><strong>Hotels:</strong> {formatCurrency(docket.itinerary.hotels.reduce((sum, h) => sum + h.netCost, 0))}</p>
-                                                            <p><strong>Excursions:</strong> {formatCurrency(docket.itinerary.excursions.reduce((sum, e) => sum + e.netCost, 0))}</p>
-                                                            <p><strong>Transfers:</strong> {formatCurrency(docket.itinerary.transfers.reduce((sum, t) => sum + t.netCost, 0))}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </React.Fragment>
+                                <tr key={docket.id} className="hover:bg-slate-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.client.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{agentName}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{mainDestination}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatDate(departureDate)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(grossBilled)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(netCost)}</td>
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button onClick={() => handleOpen(docket.id)} className="text-brand-primary underline">
+                                            {docket.id}
+                                        </button>
+                                    </td>
+                                </tr>
                             );
                         })}
                         {filteredDockets.length === 0 && (

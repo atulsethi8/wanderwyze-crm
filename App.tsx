@@ -168,7 +168,7 @@ const AppContent: React.FC = () => {
                     loading={docketsLoading}
                 />;
             case 'reports':
-                return <ReportsDashboard dockets={dockets} agents={agents} />;
+                return <ReportsDashboard dockets={dockets} agents={agents} onOpenDocket={(id) => { setSelectedDocketId(id); navigate('/form'); }} />;
             case 'settings':
                 return currentUser.role === 'admin' ? <CompanySettingsPage /> : <p>Access Denied</p>;
             case 'agents':
