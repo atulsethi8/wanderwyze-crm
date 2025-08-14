@@ -197,7 +197,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket Date</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket No</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Client Name</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Billed</th>
@@ -222,7 +222,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                     return (
                       <tr key={d.id} style={{ backgroundColor: rowBg }}>
                         <td className="px-4 py-3 text-sm text-slate-600">{created}</td>
-                        <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.id}</button></td>
+                        <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.docketNo || d.id}</button></td>
                         <td className="px-4 py-3 text-sm text-slate-800">{d.client.name}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(grossBilled)}</td>
@@ -266,7 +266,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Net</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Outstanding</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Docket ID</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Docket No</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
