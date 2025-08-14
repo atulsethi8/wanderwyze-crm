@@ -91,8 +91,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             if (session?.user) {
                 setHasSession(true);
-                const profile = await supabaseService.getUserProfile(session.user);
-                setCurrentUser(profile);
+                // Set minimal user immediately to avoid UI bounce/spinner
+                const immediateUser = {
+                  id: session.user.id,
+                  name: session.user.email || session.user.id,
+                  email: session.user.email ?? undefined,
+                  role: 'user'
+                } as AuthUser;
+                setCurrentUser(immediateUser);
+                // Refresh profile in background (best effort)
+                supabaseService.getUserProfile(session.user)
+                  .then(profile => { if (profile) setCurrentUser(profile); })
+                  .catch(() => {});
             }
         } catch (error) {
             console.error("Error in onAuthStateChange handler:", error);
