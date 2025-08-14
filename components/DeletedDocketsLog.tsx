@@ -19,9 +19,25 @@ export const DeletedDocketsLog: React.FC<DeletedDocketsLogProps> = ({ logs }) =>
     setLoading(true);
     try {
       const { data, error } = await supabase.from('dockets').select('*').eq('id', id).single();
-      if (!error && data) {
-        setDocket(data as unknown as Docket);
-      }
+      if (!error && data) { setDocket(data as unknown as Docket); return; }
+      // Fallback: try snapshot from deletion_log (if column exists)
+      let snap: any = null;
+      try {
+        const { data: logWithSnap } = await supabase.from('deletion_log').select('snapshot, client_name, deleted_at, reason').eq('docket_id', id).order('id', { ascending: false }).limit(1).maybeSingle();
+        snap = (logWithSnap as any)?.snapshot || null;
+        if (!snap && logWithSnap) {
+          // Build a minimal stub if only basic info exists
+          const nowIso = new Date().toISOString();
+          snap = {
+            id,
+            client: { name: (logWithSnap as any).client_name || 'Unknown', contactInfo: '', leadSource: 'Walk-in' },
+            status: 'In Progress', tag: 'Individual', agentId: null,
+            passengers: [], itinerary: { flights: [], hotels: [], excursions: [], transfers: [] }, files: [], comments: [], payments: [], invoices: [],
+            searchTags: [], createdBy: '', createdAt: (logWithSnap as any).deleted_at || nowIso, updatedAt: nowIso
+          } as Docket;
+        }
+      } catch {}
+      if (snap) setDocket(snap as Docket);
     } finally {
       setLoading(false);
     }
@@ -76,7 +92,7 @@ export const DeletedDocketsLog: React.FC<DeletedDocketsLogProps> = ({ logs }) =>
               readOnlyBanner="Read Only View – Deleted Docket"
             />
           ) : (
-            <div className="p-6 text-slate-600">Loading docket details…</div>
+            <div className="p-6 text-slate-600">{loading ? 'Loading docket details…' : 'Docket not found. No snapshot available in deletion log.'}</div>
           )}
         </Modal>
       </div>
