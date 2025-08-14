@@ -148,6 +148,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [addPaxToFlightIndex, setAddPaxToFlightIndex] = useState<number | null>(null);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+    const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
     const notificationTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     
     const isReadOnly = useMemo(() => {
@@ -1006,10 +1007,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
                         </div>
                         <div className="flex gap-2">
                             <button
-                                onClick={() => {
-                                    const dataUrl = `data:${f.type};base64,${f.content}`;
-                                    window.open(dataUrl, '_blank');
-                                }}
+                                onClick={() => setPreviewFile(f)}
                                 className="px-3 py-1 text-xs bg-white border border-slate-300 rounded-md hover:bg-slate-50"
                             >
                                 View
@@ -1099,6 +1097,24 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             <Modal isOpen={!!previewInvoice} onClose={() => setPreviewInvoice(null)} title={`Preview Invoice: ${previewInvoice.invoiceNumber}`} width="max-w-5xl">
                 <InvoicePreview invoice={previewInvoice} />
             </Modal>
+        )}
+
+        {previewFile && (
+          <Modal isOpen={!!previewFile} onClose={() => setPreviewFile(null)} title={`View File: ${previewFile.name}`} width="max-w-5xl">
+            {previewFile.type?.includes('pdf') ? (
+              <iframe
+                src={`data:${previewFile.type};base64,${previewFile.content}`}
+                className="w-full"
+                style={{ height: '75vh' }}
+              />
+            ) : (
+              <img
+                src={`data:${previewFile.type};base64,${previewFile.content}`}
+                alt={previewFile.name}
+                className="max-h-[75vh] w-auto mx-auto"
+              />
+            )}
+          </Modal>
         )}
     </>
     );
