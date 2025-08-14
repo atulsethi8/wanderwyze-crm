@@ -16,7 +16,8 @@
     "react-router-dom": "^7.7.0",
     "jspdf": "^2.5.1",
     "html2canvas": "^1.4.1",
-    "@supabase/supabase-js": "^2.44.4"
+    "@supabase/supabase-js": "^2.44.4",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
