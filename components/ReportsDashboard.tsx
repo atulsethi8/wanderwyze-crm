@@ -33,6 +33,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   });
   const [filterType, setFilterType] = useState<'creation' | 'departure'>('departure');
   const [agentFilter, setAgentFilter] = useState<string>('all');
+  const [destinationFilter, setDestinationFilter] = useState<string>('all');
 
   const docketsForReporting = useMemo(() => {
     if (currentUser?.role === 'admin') {
@@ -107,9 +108,25 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   }, [filteredDockets, agents]);
 
   const docketsByAgent = useMemo(() => {
-    const list = filteredDockets.filter(d => agentFilter === 'all' ? true : d.agentId === agentFilter);
-    return list;
+    return filteredDockets.filter(d => agentFilter === 'all' ? true : d.agentId === agentFilter);
   }, [filteredDockets, agentFilter]);
+
+  const destinationOptions = useMemo(() => {
+    const set = new Set<string>();
+    docketsByAgent.forEach(d => {
+      const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+      if (dest) set.add(dest);
+    });
+    return Array.from(set);
+  }, [docketsByAgent]);
+
+  const docketsByAgentDest = useMemo(() => {
+    return docketsByAgent.filter(d => {
+      if (destinationFilter === 'all') return true;
+      const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+      return dest === destinationFilter;
+    });
+  }, [docketsByAgent, destinationFilter]);
 
   const handleOpen = (id: string) => onOpenDocket(id);
 
@@ -168,8 +185,33 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                 <option value="all">All</option>
                 {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
+              <label className="text-sm text-slate-600 ml-4">Destination:</label>
+              <select value={destinationFilter} onChange={e => setDestinationFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
+                <option value="all">All</option>
+                {destinationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
             </div>
           </div>
+          {/* Metrics panel */}
+          {(() => {
+            const sum = docketsByAgentDest.reduce((acc, d) => {
+              const { grossBilled, netCost } = calculateDocketTotals(d);
+              const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+              acc.gross += grossBilled; acc.net += netCost; acc.paid += paid; acc.balance += Math.max(0, grossBilled - paid); return acc;
+            }, {gross:0, net:0, paid:0, balance:0});
+            const agentName = agentFilter === 'all' ? 'All' : (agents.find(a => a.id === agentFilter)?.name || 'Unknown');
+            const destName = destinationFilter === 'all' ? 'All' : destinationFilter;
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Agent</p><p className="text-sm font-semibold text-slate-800">{agentName}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Destination</p><p className="text-sm font-semibold text-slate-800">{destName}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Billed</p><p className="text-sm font-semibold">{formatCurrency(sum.gross)}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Total Net</p><p className="text-sm font-semibold">{formatCurrency(sum.net)}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Amount Paid</p><p className="text-sm font-semibold">{formatCurrency(sum.paid)}</p></div>
+                <div className="p-3 bg-slate-50 rounded border"><p className="text-xs text-slate-500">Balance Due</p><p className="text-sm font-semibold">{formatCurrency(sum.balance)}</p></div>
+              </div>
+            )
+          })()}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
@@ -186,22 +228,23 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
               <tbody className="bg-white divide-y divide-slate-200">
                 {(() => {
                   let sumBilled = 0; let sumPaid = 0; let sumBalance = 0;
-                  const rows = docketsByAgent.map(d => {
+                  const rows = docketsByAgentDest.map(d => {
                     const { grossBilled } = calculateDocketTotals(d);
                     const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
                     const balance = Math.max(0, grossBilled - paid);
                     sumBilled += grossBilled; sumPaid += paid; sumBalance += balance;
                     const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
-                    const created = d.createdAt ? formatDate(d.createdAt) : 'N/A';
+                    const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
+                    const rowBg = balance === 0 ? '#d4edda' : '#f8d7da';
                     return (
-                      <tr key={d.id}>
+                      <tr key={d.id} style={{ backgroundColor: rowBg }}>
                         <td className="px-4 py-3 text-sm text-slate-600">{created}</td>
                         <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.id}</button></td>
                         <td className="px-4 py-3 text-sm text-slate-800">{d.client.name}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(grossBilled)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(paid)}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(sumBalance && balance)}</td>
+                        <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(balance)}</td>
                       </tr>
                     );
                   });
@@ -215,7 +258,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   );
                   return rows;
                 })()}
-                {docketsByAgent.length === 0 && (
+                {docketsByAgentDest.length === 0 && (
                   <tr><td colSpan={7} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
                 )}
               </tbody>
@@ -258,9 +301,10 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                             const paid = (docket.payments || []).reduce((s,p) => s + (p.amount||0), 0);
                             const outstanding = Math.max(0, grossBilled - paid);
                             totalProfit += profit;
+                            const rowBg = outstanding === 0 ? '#d4edda' : '#f8d7da';
                             
                             return (
-                                <tr key={docket.id} className="hover:bg-slate-50">
+                                <tr key={docket.id} className="hover:bg-slate-50" style={{ backgroundColor: rowBg }}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.client.name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{agentName}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{mainDestination}</td>
