@@ -803,7 +803,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             <div className="flex-grow lg:w-2/3 p-4 sm:p-6 overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        {docket ? `Edit Docket: ${docket.id}` : 'Create New Docket'}
+                        {docket ? `Edit Docket: ${docket.docketNo || docket.id}` : 'Create New Docket'}
                         {isReadOnly && <span className="text-amber-500" title="Read-only mode">🔒</span>}
                     </h1>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-800"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>

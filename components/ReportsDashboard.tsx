@@ -300,7 +300,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(outstanding)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <button onClick={() => handleOpen(docket.id)} className="text-brand-primary underline">
-                                            {docket.id}
+                                            {docket.docketNo || docket.id}
                                         </button>
                                     </td>
                                 </tr>

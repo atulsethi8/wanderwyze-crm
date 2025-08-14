@@ -195,6 +195,7 @@ export interface Invoice {
 
 export interface Docket {
   id: string;
+  docketNo?: string; // optional 5-digit display number for new dockets
   client: Client;
   status: BookingStatus;
   tag: Tag;

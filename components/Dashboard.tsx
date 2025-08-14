@@ -180,7 +180,7 @@ const OutstandingBalances: React.FC<{ dockets: Docket[]; onSelectDocket: (id: st
           <tbody className="bg-white divide-y divide-slate-200">
             {filteredOutstandingDockets.map(docket => (
               <tr key={docket.id} className={docket.balanceDue > 50000 ? 'bg-red-50' : ''}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{docket.id}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{docket.docketNo || docket.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.clientName}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{docket.earliestDeparture ? formatDate(toYYYYMMDD(docket.earliestDeparture)) : 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(docket.grossBilled)}</td>

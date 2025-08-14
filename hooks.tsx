@@ -10,9 +10,10 @@ import { Database } from './database.types';
 
 const mapDbDocketToAppDocket = (dbDocket: any): Docket => {
     if (!dbDocket) return dbDocket;
-    const { agent_id, search_tags, created_by, created_at, updated_at, ...rest } = dbDocket;
+    const { agent_id, search_tags, created_by, created_at, updated_at, docket_no, ...rest } = dbDocket;
     return {
         ...rest,
+        docketNo: docket_no,
         agentId: agent_id,
         searchTags: search_tags,
         createdBy: created_by,
@@ -23,8 +24,9 @@ const mapDbDocketToAppDocket = (dbDocket: any): Docket => {
 
 const mapAppDocketToDbDocket = (appDocket: Partial<Docket>): any => {
     if (!appDocket) return appDocket;
-    const { agentId, searchTags, createdBy, createdAt, updatedAt, ...rest } = appDocket;
+    const { agentId, searchTags, createdBy, createdAt, updatedAt, docketNo, ...rest } = appDocket;
     const dbObject: any = { ...rest };
+    if (docketNo !== undefined) dbObject.docket_no = docketNo;
     if (agentId !== undefined) dbObject.agent_id = agentId;
     if (searchTags !== undefined) dbObject.search_tags = searchTags;
     if (createdBy !== undefined) dbObject.created_by = createdBy;
