@@ -292,12 +292,14 @@ export const useDockets = () => {
             docketToSave = { ...docketData, id, updatedAt: new Date().toISOString(), searchTags: createSearchTags(docketData) };
         } else {
             if (!currentUser) throw new Error("User must be logged in to create a docket.");
-            docketToSave = { ...docketData, id: `DOCKET-${Date.now()}`, createdBy: currentUser.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), searchTags: createSearchTags(docketData) };
+            docketToSave = { ...docketData, createdBy: currentUser.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), searchTags: createSearchTags(docketData) };
         }
         
         const dbObject = mapAppDocketToDbDocket(docketToSave);
         
-        const { data, error } = await supabase.from('dockets').upsert(dbObject).select().single();
+        const { data, error } = id
+            ? await supabase.from('dockets').upsert(dbObject).select().single()
+            : await supabase.from('dockets').insert([dbObject]).select().single();
         
         if (error) throw error;
 
