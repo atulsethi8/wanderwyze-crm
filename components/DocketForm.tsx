@@ -21,15 +21,16 @@ interface DocketFormProps {
   readOnlyBanner?: string;
 }
 
-const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon, children, defaultOpen = true }) => (
-    <details open={defaultOpen} className="bg-white rounded-lg shadow-sm border border-slate-200 mb-4">
-        <summary className="p-4 cursor-pointer flex items-center justify-between font-semibold text-slate-700">
-            <div className="flex items-center gap-3">
-                {icon} {title}
+const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean; bgClass?: string }> = ({ title, icon, children, defaultOpen = true, bgClass = 'bg-white' }) => (
+    <details open={defaultOpen} className={`${bgClass} rounded-lg shadow-sm border border-slate-200 mb-4`}> 
+        <summary className="px-5 py-4 cursor-pointer flex items-center justify-between font-semibold text-slate-800">
+            <div className="flex items-center gap-3 text-slate-800">
+                <span className="inline-flex items-center justify-center w-6 h-6 text-slate-600">{icon}</span>
+                <span className="text-base">{title}</span>
             </div>
             <span className="text-slate-500 transform transition-transform duration-200 group-open:rotate-180">{Icons.chevronDown}</span>
         </summary>
-        <div className="p-4 border-t border-slate-200">{children}</div>
+        <div className="p-5 border-t border-slate-200">{children}</div>
     </details>
 );
 
@@ -825,164 +826,165 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
 
                 {activeTab === 'itinerary' && (<>
                     <button onClick={() => setAiModalOpen(true)} disabled={isReadOnly} className="flex items-center gap-2 bg-teal-500 text-white px-4 py-2 rounded-md font-semibold hover:bg-teal-600 mb-4 disabled:bg-slate-400">{Icons.ai} AI Itinerary Suggestions</button>
-                    
-                     <Section title="Passengers" icon={Icons.user}>
-                        <div className="flex items-center gap-4 mb-4">
-                            <button onClick={addPassenger} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Passenger</button>
-                            <label htmlFor="pax-ticket-upload" className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>
-                                {Icons.ai} Upload E‑Ticket & Autofill
-                            </label>
-                            <input id="pax-ticket-upload" type="file" className="hidden" onChange={handlePassengerTabTicketUpload} accept="image/*,application/pdf" disabled={isReadOnly} />
-                        </div>
-                        <div className="space-y-3">{formState.passengers.map((pax, index) => (
-                            <details key={pax.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                <summary className="flex justify-between items-center cursor-pointer list-none">
-                                    <div className="flex items-center gap-2">
-                                         <span className="text-slate-400">{Icons.chevronDown}</span>
-                                        <span className="font-medium text-slate-800">{pax.fullName || `Passenger ${index + 1}`}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <FormSelect label="" value={pax.type} onChange={e => updatePassenger(pax.id, 'type', e.target.value as PassengerType)} disabled={isReadOnly} className="w-24 text-sm !p-1.5">{Object.values(PassengerType).map(t => <option key={t} value={t}>{t}</option>)}</FormSelect>
-                                        <FormSelect label="" value={pax.gender} onChange={e => updatePassenger(pax.id, 'gender', e.target.value as Gender)} disabled={isReadOnly} className="w-24 text-sm !p-1.5">{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</FormSelect>
-                                        <button onClick={() => removePassenger(pax.id)} disabled={isReadOnly} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent">{Icons.trash}</button>
-                                    </div>
-                                </summary>
-                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-                                    <FormInput label="Full Name" value={pax.fullName} onChange={e => updatePassenger(pax.id, 'fullName', e.target.value)} placeholder={`Passenger ${index + 1} Full Name`} disabled={isReadOnly} />
-                                    <FormInput label="Email" type="email" value={pax.email || ''} onChange={e => updatePassenger(pax.id, 'email', e.target.value)} placeholder="Email Address" disabled={isReadOnly} />
-                                    <FormInput label="Phone" value={pax.phone || ''} onChange={e => updatePassenger(pax.id, 'phone', e.target.value)} placeholder="Phone Number" disabled={isReadOnly} />
-                                    <FormInput label="GSTIN (Optional)" value={pax.gstin || ''} onChange={e => updatePassenger(pax.id, 'gstin', e.target.value)} placeholder="GST Identification Number" disabled={isReadOnly} />
-                                    <FormTextarea containerClassName="md:col-span-2" label="Address" value={pax.address || ''} onChange={e => updatePassenger(pax.id, 'address', e.target.value)} placeholder="Billing Address" rows={2} disabled={isReadOnly} />
-                                </div>
-                            </details>
-                        ))}</div>
-                    </Section>
+                    <div className={`${formState.status === BookingStatus.Confirmed ? 'confirmed-mode' : 'editable-mode'}`}>
+                     <Section title="Passengers" icon={Icons.user} bgClass="bg-white">
+                         <div className="flex items-center gap-4 mb-4">
+                             <button onClick={addPassenger} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Passenger</button>
+                             <label htmlFor="pax-ticket-upload" className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>
+                                 {Icons.ai} Upload E‑Ticket & Autofill
+                             </label>
+                             <input id="pax-ticket-upload" type="file" className="hidden" onChange={handlePassengerTabTicketUpload} accept="image/*,application/pdf" disabled={isReadOnly} />
+                         </div>
+                         <div className="space-y-3">{formState.passengers.map((pax, index) => (
+                             <details key={pax.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                 <summary className="flex justify-between items-center cursor-pointer list-none">
+                                     <div className="flex items-center gap-2">
+                                          <span className="text-slate-400">{Icons.chevronDown}</span>
+                                         <span className="font-medium text-slate-800">{pax.fullName || `Passenger ${index + 1}`}</span>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                         <FormSelect label="" value={pax.type} onChange={e => updatePassenger(pax.id, 'type', e.target.value as PassengerType)} disabled={isReadOnly} className="w-24 text-sm !p-1.5">{Object.values(PassengerType).map(t => <option key={t} value={t}>{t}</option>)}</FormSelect>
+                                         <FormSelect label="" value={pax.gender} onChange={e => updatePassenger(pax.id, 'gender', e.target.value as Gender)} disabled={isReadOnly} className="w-24 text-sm !p-1.5">{Object.values(Gender).map(g => <option key={g} value={g}>{g}</option>)}</FormSelect>
+                                         <button onClick={() => removePassenger(pax.id)} disabled={isReadOnly} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent">{Icons.trash}</button>
+                                     </div>
+                                 </summary>
+                                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                                     <FormInput label="Full Name" value={pax.fullName} onChange={e => updatePassenger(pax.id, 'fullName', e.target.value)} placeholder={`Passenger ${index + 1} Full Name`} disabled={isReadOnly} />
+                                     <FormInput label="Email" type="email" value={pax.email || ''} onChange={e => updatePassenger(pax.id, 'email', e.target.value)} placeholder="Email Address" disabled={isReadOnly} />
+                                     <FormInput label="Phone" value={pax.phone || ''} onChange={e => updatePassenger(pax.id, 'phone', e.target.value)} placeholder="Phone Number" disabled={isReadOnly} />
+                                     <FormInput label="GSTIN (Optional)" value={pax.gstin || ''} onChange={e => updatePassenger(pax.id, 'gstin', e.target.value)} placeholder="GST Identification Number" disabled={isReadOnly} />
+                                     <FormTextarea containerClassName="md:col-span-2" label="Address" value={pax.address || ''} onChange={e => updatePassenger(pax.id, 'address', e.target.value)} placeholder="Billing Address" rows={2} disabled={isReadOnly} />
+                                 </div>
+                             </details>
+                         ))}</div>
+                     </Section>
 
-                    <Section title="Flights" icon={Icons.plane}>
-                        <div className="flex items-center gap-4 mb-4">
-                            <button onClick={() => addToArray('flights', { id: `FL-${Date.now()}`, airline: '', pnr: '', departureDate: '', arrivalAirport: '', departureAirport: '', passengerDetails: [], isNetGrossSameForAll: true, commonGrossBilled: 0, commonNetCost: 0, supplier: null })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Flight</button>
-                        </div>
-                        {formState.itinerary.flights.map((flight, index) => (
-                        <div key={flight.id} className="p-4 border rounded-md mb-4 bg-slate-50">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                <FormInput label="Airline" value={flight.airline} onChange={e => handleFlightFieldChange(index, 'airline', e.target.value)} disabled={isReadOnly} />
-                                <FormInput label="Flight No." value={flight.flightNumber || ''} onChange={e => handleFlightFieldChange(index, 'flightNumber', e.target.value)} disabled={isReadOnly} />
-                                <FormInput label="PNR" value={flight.pnr} onChange={e => handleFlightFieldChange(index, 'pnr', e.target.value)} disabled={isReadOnly} />
-                                <div><SupplierSelectControl value={flight.supplier?.id} onChange={e => handleFlightFieldChange(index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div>
-                                <FormInput containerClassName="md:col-span-2" label="From Airport" value={flight.departureAirport} onChange={e => handleFlightFieldChange(index, 'departureAirport', e.target.value)} disabled={isReadOnly} />
-                                <FormInput containerClassName="md:col-span-2" label="To Airport" value={flight.arrivalAirport} onChange={e => handleFlightFieldChange(index, 'arrivalAirport', e.target.value)} disabled={isReadOnly} />
-                                <FormInput label="Departure Date" type="date" value={flight.departureDate} onChange={e => handleFlightFieldChange(index, 'departureDate', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} />
-                                <FormInput label="Departure Time" type="time" value={flight.departureTime || ''} onChange={e => handleFlightFieldChange(index, 'departureTime', e.target.value)} disabled={isReadOnly} />
-                                <FormInput label="Arrival Date" type="date" value={flight.arrivalDate || ''} onChange={e => handleFlightFieldChange(index, 'arrivalDate', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} />
-                                <FormInput label="Arrival Time" type="time" value={flight.arrivalTime || ''} onChange={e => handleFlightFieldChange(index, 'arrivalTime', e.target.value)} disabled={isReadOnly} />
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                                <label htmlFor={`flight-upload-${index}`} className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-2 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>
-                                    {Icons.ai} Upload & Autofill Ticket
-                                </label>
-                                <input id={`flight-upload-${index}`} type="file" className="hidden" onChange={e => handleFlightTicketUpload(e, index)} accept="image/*,application/pdf" disabled={isReadOnly} />
-                                <button onClick={() => removeFromArray('flights', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md h-10 disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash}</button>
-                            </div>
-                            <div className="p-3 border-t mt-4">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h4 className="font-semibold">Passengers & Pricing</h4>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAddPaxToFlightIndex(index)}
-                                        className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500"
-                                        disabled={isReadOnly}
-                                    >
-                                        {Icons.plus} Add Passenger Manually
-                                    </button>
-                                </div>
-                                <div className="flex items-center gap-4 mb-3 p-2 bg-slate-200 rounded-md">
-                                    <label className="flex items-center gap-2 text-sm font-medium">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={flight.isNetGrossSameForAll} 
-                                            onChange={() => handleFlightSameCostToggle(index)} 
-                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            disabled={isReadOnly}
-                                        />
-                                        Net/Gross is same for all
-                                    </label>
-                                    {flight.isNetGrossSameForAll && (
-                                        <>
-                                            <FormInput 
-                                                label="Common Net" 
-                                                type="number" 
-                                                value={flight.commonNetCost || ''} 
-                                                onChange={e => handleFlightCommonCostChange(index, 'commonNetCost', +e.target.value)} 
-                                                disabled={isReadOnly}
-                                            />
-                                            <FormInput 
-                                                label="Common Gross" 
-                                                type="number" 
-                                                value={flight.commonGrossBilled || ''} 
-                                                onChange={e => handleFlightCommonCostChange(index, 'commonGrossBilled', +e.target.value)} 
-                                                disabled={isReadOnly}
-                                            />
-                                        </>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    {flight.passengerDetails.length > 0 ? (
-                                        flight.passengerDetails.map((paxDetail) => {
-                                            const pax = formState.passengers.find(p => p.id === paxDetail.passengerId);
-                                            if (!pax) return null;
+                     <Section title="Flights" icon={Icons.plane} bgClass="bg-[#f0f8ff]">
+                         <div className="flex items-center gap-2 mb-4">
+                             <button onClick={() => addToArray('flights', { id: `FL-${Date.now()}`, airline: '', pnr: '', bookingId: '', flightNumber: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', departureAirport: '', arrivalAirport: '', supplier: null, isNetGrossSameForAll: false, commonNetCost: 0, commonGrossBilled: 0, passengerDetails: [] })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Flight</button>
+                         </div>
+                         {formState.itinerary.flights.map((flight, index) => (
+                         <div key={flight.id} className="p-4 border rounded-md mb-4 bg-slate-50">
+                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                 <FormInput label="Airline" value={flight.airline} onChange={e => handleFlightFieldChange(index, 'airline', e.target.value)} disabled={isReadOnly} />
+                                 <FormInput label="Flight No." value={flight.flightNumber || ''} onChange={e => handleFlightFieldChange(index, 'flightNumber', e.target.value)} disabled={isReadOnly} />
+                                 <FormInput label="PNR" value={flight.pnr} onChange={e => handleFlightFieldChange(index, 'pnr', e.target.value)} disabled={isReadOnly} />
+                                 <div><SupplierSelectControl value={flight.supplier?.id} onChange={e => handleFlightFieldChange(index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div>
+                                 <FormInput containerClassName="md:col-span-2" label="From Airport" value={flight.departureAirport} onChange={e => handleFlightFieldChange(index, 'departureAirport', e.target.value)} disabled={isReadOnly} />
+                                 <FormInput containerClassName="md:col-span-2" label="To Airport" value={flight.arrivalAirport} onChange={e => handleFlightFieldChange(index, 'arrivalAirport', e.target.value)} disabled={isReadOnly} />
+                                 <FormInput label="Departure Date" type="date" value={flight.departureDate} onChange={e => handleFlightFieldChange(index, 'departureDate', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} />
+                                 <FormInput label="Departure Time" type="time" value={flight.departureTime || ''} onChange={e => handleFlightFieldChange(index, 'departureTime', e.target.value)} disabled={isReadOnly} />
+                                 <FormInput label="Arrival Date" type="date" value={flight.arrivalDate || ''} onChange={e => handleFlightFieldChange(index, 'arrivalDate', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} />
+                                 <FormInput label="Arrival Time" type="time" value={flight.arrivalTime || ''} onChange={e => handleFlightFieldChange(index, 'arrivalTime', e.target.value)} disabled={isReadOnly} />
+                             </div>
+                             <div className="flex items-center justify-end gap-2">
+                                 <label htmlFor={`flight-upload-${index}`} className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-2 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>
+                                     {Icons.ai} Upload & Autofill Ticket
+                                 </label>
+                                 <input id={`flight-upload-${index}`} type="file" className="hidden" onChange={e => handleFlightTicketUpload(e, index)} accept="image/*,application/pdf" disabled={isReadOnly} />
+                                 <button onClick={() => removeFromArray('flights', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md h-10 disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash}</button>
+                             </div>
+                             <div className="p-3 border-t mt-4">
+                                 <div className="flex justify-between items-center mb-2">
+                                     <h4 className="font-semibold">Passengers & Pricing</h4>
+                                     <button
+                                         type="button"
+                                         onClick={() => setAddPaxToFlightIndex(index)}
+                                         className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500"
+                                         disabled={isReadOnly}
+                                     >
+                                         {Icons.plus} Add Passenger Manually
+                                     </button>
+                                 </div>
+                                 <div className="flex items-center gap-4 mb-3 p-2 bg-slate-200 rounded-md">
+                                     <label className="flex items-center gap-2 text-sm font-medium">
+                                         <input 
+                                             type="checkbox" 
+                                             checked={flight.isNetGrossSameForAll} 
+                                             onChange={() => handleFlightSameCostToggle(index)} 
+                                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                             disabled={isReadOnly}
+                                         />
+                                         Net/Gross is same for all
+                                     </label>
+                                     {flight.isNetGrossSameForAll && (
+                                         <>
+                                             <FormInput 
+                                                 label="Common Net" 
+                                                 type="number" 
+                                                 value={flight.commonNetCost || ''} 
+                                                 onChange={e => handleFlightCommonCostChange(index, 'commonNetCost', +e.target.value)} 
+                                                 disabled={isReadOnly}
+                                             />
+                                             <FormInput 
+                                                 label="Common Gross" 
+                                                 type="number" 
+                                                 value={flight.commonGrossBilled || ''} 
+                                                 onChange={e => handleFlightCommonCostChange(index, 'commonGrossBilled', +e.target.value)} 
+                                                 disabled={isReadOnly}
+                                             />
+                                         </>
+                                     )}
+                                 </div>
+                                 <div className="space-y-2">
+                                     {flight.passengerDetails.length > 0 ? (
+                                         flight.passengerDetails.map((paxDetail) => {
+                                             const pax = formState.passengers.find(p => p.id === paxDetail.passengerId);
+                                             if (!pax) return null;
 
-                                            return (
-                                                <div key={pax.id} className="grid grid-cols-12 gap-2 items-center p-2 rounded-md hover:bg-slate-100">
-                                                    <div className="col-span-12 md:col-span-5 flex items-center">
-                                                        <span className="font-medium text-sm truncate">{pax.fullName}</span>
-                                                    </div>
-                                                    <div className="col-span-5 md:col-span-3">
-                                                        <FormInput
-                                                            label=""
-                                                            placeholder="Net Cost"
-                                                            type="number"
-                                                            disabled={flight.isNetGrossSameForAll || isReadOnly}
-                                                            value={paxDetail.netCost || ''}
-                                                            onChange={e => handleFlightPaxPriceChange(index, pax.id, 'netCost', +e.target.value)}
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-5 md:col-span-3">
-                                                        <FormInput
-                                                            label=""
-                                                            placeholder="Gross Billed"
-                                                            type="number"
-                                                            disabled={flight.isNetGrossSameForAll || isReadOnly}
-                                                            value={paxDetail.grossBilled || ''}
-                                                            onChange={e => handleFlightPaxPriceChange(index, pax.id, 'grossBilled', +e.target.value)}
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-2 md:col-span-1 flex justify-end">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removePassengerFromFlight(index, pax.id)}
-                                                            className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent"
-                                                            aria-label={`Remove ${pax.fullName} from flight`}
-                                                            disabled={isReadOnly}
-                                                        >
-                                                            {Icons.trash}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <p className="text-sm text-slate-500 text-center py-2">Add passengers to this flight via the "Add Passenger Manually" button or by uploading an e-ticket.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        ))}
-                    </Section>
-                    <Section title="Hotels" icon={Icons.hotel}><div className="flex items-center gap-4 mb-4"><button onClick={() => addToArray('hotels', { id: `HO-${Date.now()}`, name: '', checkIn: '', checkOut: '', numberOfRooms: 1, netCost: 0, grossBilled: 0, supplier: null, paxRefs: [] })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Hotel</button><label htmlFor="hotel-upload" className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>{Icons.ai} Autofill from Voucher</label><input id="hotel-upload" type="file" className="hidden" onChange={handleHotelVoucherUpload} accept="image/*,application/pdf" disabled={isReadOnly}/></div>{formState.itinerary.hotels.map((hotel, index) => (<div key={hotel.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end"><FormInput containerClassName="col-span-2 md:col-span-3 lg:col-span-5" label="Hotel Name" value={hotel.name} onChange={e => handleArrayChange('hotels', index, 'name', e.target.value)} disabled={isReadOnly} /><FormInput label="Check-in" type="date" value={hotel.checkIn} onChange={e => handleArrayChange('hotels', index, 'checkIn', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><FormInput label="Check-out" type="date" value={hotel.checkOut} onChange={e => handleArrayChange('hotels', index, 'checkOut', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><FormInput label="Nights" type="text" readOnly value={getNumberOfNights(hotel.checkIn, hotel.checkOut)} /><FormInput label="Rooms" type="number" value={hotel.numberOfRooms} onChange={e => handleArrayChange('hotels', index, 'numberOfRooms', +e.target.value)} disabled={isReadOnly} /><button onClick={() => removeFromArray('hotels', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={hotel.netCost} onChange={e => handleArrayChange('hotels', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={hotel.grossBilled} onChange={e => handleArrayChange('hotels', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={hotel.supplier?.id} onChange={e => handleArrayChange('hotels', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div><div className="col-span-full border-t pt-4 mt-4"><h4 className="font-semibold text-sm mb-2 text-slate-600">Guests for this Hotel</h4>{formState.passengers.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 gap-2">{formState.passengers.map(pax => (<label key={pax.id} className="flex items-center gap-2 p-2 bg-white rounded-md border text-left"><input type="checkbox" checked={hotel.paxRefs.includes(pax.id)} onChange={() => handleHotelPaxToggle(index, pax.id)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" disabled={isReadOnly} /><span className="text-sm truncate">{pax.fullName}</span></label>))}</div>) : (<p className="text-sm text-slate-500">Add passengers to the docket first to assign them to this hotel.</p>)}</div></div>))}</Section>
-                    <Section title="Excursions / Activities" icon={Icons.excursion}><button onClick={() => addToArray('excursions', { id: `EX-${Date.now()}`, name: '', date: '', netCost: 0, grossBilled: 0, supplier: null })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 mb-4 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Excursion</button>{formState.itinerary.excursions.map((excursion, index) => (<div key={excursion.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-4 gap-4 items-end"><FormInput containerClassName="col-span-2" label="Excursion Name" value={excursion.name} onChange={e => handleArrayChange('excursions', index, 'name', e.target.value)} disabled={isReadOnly} /><FormInput label="Date" type="date" value={excursion.date} onChange={e => handleArrayChange('excursions', index, 'date', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><button onClick={() => removeFromArray('excursions', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={excursion.netCost} onChange={e => handleArrayChange('excursions', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={excursion.grossBilled} onChange={e => handleArrayChange('excursions', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={excursion.supplier?.id} onChange={e => handleArrayChange('excursions', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div></div>))}</Section>
-                     <Section title="Transfers" icon={Icons.transfer}><button onClick={() => addToArray('transfers', { id: `TR-${Date.now()}`, provider: '', date: '', netCost: 0, grossBilled: 0, supplier: null })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 mb-4 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Transfer</button>{formState.itinerary.transfers.map((transfer, index) => (<div key={transfer.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-4 gap-4 items-end"><FormInput containerClassName="col-span-2" label="Provider Name" value={transfer.provider} onChange={e => handleArrayChange('transfers', index, 'provider', e.target.value)} disabled={isReadOnly} /><FormInput label="Date" type="date" value={transfer.date} onChange={e => handleArrayChange('transfers', index, 'date', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><button onClick={() => removeFromArray('transfers', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={transfer.netCost} onChange={e => handleArrayChange('transfers', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={transfer.grossBilled} onChange={e => handleArrayChange('transfers', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={transfer.supplier?.id} onChange={e => handleArrayChange('transfers', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div></div>))}</Section>
-                </>)}
-                    
+                                             return (
+                                                 <div key={pax.id} className="grid grid-cols-12 gap-2 items-center p-2 rounded-md hover:bg-slate-100">
+                                                     <div className="col-span-12 md:col-span-5 flex items-center">
+                                                         <span className="font-medium text-sm truncate">{pax.fullName}</span>
+                                                     </div>
+                                                     <div className="col-span-5 md:col-span-3">
+                                                         <FormInput
+                                                             label=""
+                                                             placeholder="Net Cost"
+                                                             type="number"
+                                                             disabled={flight.isNetGrossSameForAll || isReadOnly}
+                                                             value={paxDetail.netCost || ''}
+                                                             onChange={e => handleFlightPaxPriceChange(index, pax.id, 'netCost', +e.target.value)}
+                                                         />
+                                                     </div>
+                                                     <div className="col-span-5 md:col-span-3">
+                                                         <FormInput
+                                                             label=""
+                                                             placeholder="Gross Billed"
+                                                             type="number"
+                                                             disabled={flight.isNetGrossSameForAll || isReadOnly}
+                                                             value={paxDetail.grossBilled || ''}
+                                                             onChange={e => handleFlightPaxPriceChange(index, pax.id, 'grossBilled', +e.target.value)}
+                                                         />
+                                                     </div>
+                                                     <div className="col-span-2 md:col-span-1 flex justify-end">
+                                                         <button
+                                                             type="button"
+                                                             onClick={() => removePassengerFromFlight(index, pax.id)}
+                                                             className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent"
+                                                             aria-label={`Remove ${pax.fullName} from flight`}
+                                                             disabled={isReadOnly}
+                                                         >
+                                                             {Icons.trash}
+                                                         </button>
+                                                     </div>
+                                                 </div>
+                                             );
+                                         })
+                                     ) : (
+                                         <p className="text-sm text-slate-500 text-center py-2">Add passengers to this flight via the "Add Passenger Manually" button or by uploading an e-ticket.</p>
+                                     )}
+                                 </div>
+                             </div>
+                         </div>
+                         ))}
+                     </Section>
+                     <Section title="Hotels" icon={Icons.hotel} bgClass="bg-[#f4fff0]"><div className="flex items-center gap-4 mb-4"><button onClick={() => addToArray('hotels', { id: `HO-${Date.now()}`, name: '', checkIn: '', checkOut: '', numberOfRooms: 1, netCost: 0, grossBilled: 0, supplier: null, paxRefs: [] })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Hotel</button><label htmlFor="hotel-upload" className={`flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-purple-200 ${isReadOnly ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'cursor-pointer'}`}>{Icons.ai} Autofill from Voucher</label><input id="hotel-upload" type="file" className="hidden" onChange={handleHotelVoucherUpload} accept="image/*,application/pdf" disabled={isReadOnly}/></div>{formState.itinerary.hotels.map((hotel, index) => (<div key={hotel.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end"><FormInput containerClassName="col-span-2 md:col-span-3 lg:col-span-5" label="Hotel Name" value={hotel.name} onChange={e => handleArrayChange('hotels', index, 'name', e.target.value)} disabled={isReadOnly} /><FormInput label="Check-in" type="date" value={hotel.checkIn} onChange={e => handleArrayChange('hotels', index, 'checkIn', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><FormInput label="Check-out" type="date" value={hotel.checkOut} onChange={e => handleArrayChange('hotels', index, 'checkOut', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><FormInput label="Nights" type="text" readOnly value={getNumberOfNights(hotel.checkIn, hotel.checkOut)} /><FormInput label="Rooms" type="number" value={hotel.numberOfRooms} onChange={e => handleArrayChange('hotels', index, 'numberOfRooms', +e.target.value)} disabled={isReadOnly} /><button onClick={() => removeFromArray('hotels', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={hotel.netCost} onChange={e => handleArrayChange('hotels', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={hotel.grossBilled} onChange={e => handleArrayChange('hotels', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={hotel.supplier?.id} onChange={e => handleArrayChange('hotels', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div><div className="col-span-full border-t pt-4 mt-4"><h4 className="font-semibold text-sm mb-2 text-slate-600">Guests for this Hotel</h4>{formState.passengers.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 gap-2">{formState.passengers.map(pax => (<label key={pax.id} className="flex items-center gap-2 p-2 bg-white rounded-md border text-left"><input type="checkbox" checked={hotel.paxRefs.includes(pax.id)} onChange={() => handleHotelPaxToggle(index, pax.id)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" disabled={isReadOnly} /><span className="text-sm truncate">{pax.fullName}</span></label>))}</div>) : (<p className="text-sm text-slate-500">Add passengers to the docket first to assign them to this hotel.</p>)}</div></div>))}</Section>
+                     <Section title="Excursions / Activities" icon={Icons.excursion} bgClass="bg-[#fffdf0]"><button onClick={() => addToArray('excursions', { id: `EX-${Date.now()}`, name: '', date: '', netCost: 0, grossBilled: 0, supplier: null })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 mb-4 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Excursion</button>{formState.itinerary.excursions.map((excursion, index) => (<div key={excursion.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-4 gap-4 items-end"><FormInput containerClassName="col-span-2" label="Excursion Name" value={excursion.name} onChange={e => handleArrayChange('excursions', index, 'name', e.target.value)} disabled={isReadOnly} /><FormInput label="Date" type="date" value={excursion.date} onChange={e => handleArrayChange('excursions', index, 'date', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><button onClick={() => removeFromArray('excursions', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={excursion.netCost} onChange={e => handleArrayChange('excursions', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={excursion.grossBilled} onChange={e => handleArrayChange('excursions', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={excursion.supplier?.id} onChange={e => handleArrayChange('excursions', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div></div>))}</Section>
+                     <Section title="Transfers" icon={Icons.transfer} bgClass="bg-[#f9f0ff]"><button onClick={() => addToArray('transfers', { id: `TR-${Date.now()}`, provider: '', date: '', netCost: 0, grossBilled: 0, supplier: null })} disabled={isReadOnly} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-200 mb-4 disabled:bg-slate-200 disabled:text-slate-500">{Icons.plus} Add Transfer</button>{formState.itinerary.transfers.map((transfer, index) => (<div key={transfer.id} className="p-4 border rounded-md mb-2 bg-slate-50 grid grid-cols-2 md:grid-cols-4 gap-4 items-end"><FormInput containerClassName="col-span-2" label="Provider Name" value={transfer.provider} onChange={e => handleArrayChange('transfers', index, 'provider', e.target.value)} disabled={isReadOnly} /><FormInput label="Date" type="date" value={transfer.date} onChange={e => handleArrayChange('transfers', index, 'date', e.target.value)} icon={Icons.calendar} disabled={isReadOnly} /><button onClick={() => removeFromArray('transfers', index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:text-slate-400 disabled:hover:bg-transparent" disabled={isReadOnly}>{Icons.trash} Remove</button><FormInput label="Net Cost" type="number" value={transfer.netCost} onChange={e => handleArrayChange('transfers', index, 'netCost', +e.target.value)} disabled={isReadOnly} /><FormInput label="Gross Billed" type="number" value={transfer.grossBilled} onChange={e => handleArrayChange('transfers', index, 'grossBilled', +e.target.value)} disabled={isReadOnly} /><div className="col-span-2 md:col-span-1"><SupplierSelectControl value={transfer.supplier?.id} onChange={e => handleArrayChange('transfers', index, 'supplier', suppliers.find(s => s.id === e.target.value) || null)} /></div></div>))}</Section>
+                     </div>
+                 </>)}
+
                 {activeTab === 'payments' && (<Section title="Payments" icon={Icons.payment}><NewPaymentForm onAddPayment={addPayment} disabled={isReadOnly} /><h4 className="text-lg font-semibold mt-6 mb-2">Payment History</h4><div className="space-y-2">{formState.payments.map(p => (<div key={p.id} className="bg-slate-50 p-3 rounded-md "><div className="flex justify-between items-center"><div><p className="font-bold text-lg text-green-700">{formatCurrency(p.amount)}</p><p className="text-sm text-slate-600">{p.type} on {formatDate(p.date)}</p></div></div><p className="text-xs text-slate-500 italic mt-1">{amountToWords(p.amount)}</p>{p.notes && <p className="text-xs text-slate-500 mt-1">Note: {p.notes}</p>}</div>))}</div></Section>)}
                 {activeTab === 'files' && (<><Section title="Files" icon={Icons.file}><input type="file" onChange={e => handleFileUpload(e)} className="mb-4" disabled={isReadOnly} /><div className="space-y-2">{formState.files.map(f => {
                     const linkedItemDesc = getLinkedItemDescription(f);
