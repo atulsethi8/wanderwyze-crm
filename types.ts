@@ -190,6 +190,7 @@ export interface Invoice {
   companySettings: CompanySettings; // snapshot of settings at time of creation
   terms: string;
   dueDate: string;
+  customerId?: string; // optional link to Customer Master while preserving snapshot
 }
 
 
@@ -238,4 +239,15 @@ export interface CompanySettings {
   gstNumber?: string;
   companyState: string;
   lastInvoiceNumber: number;
+}
+
+// New: Customer Master entity
+export interface Customer {
+  customer_id: string;
+  name: string;
+  address: string;
+  gst_number: string;
+  email?: string | null;
+  phone?: string | null;
+  created_at?: string;
 }

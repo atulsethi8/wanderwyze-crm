@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings } from '../types';
+import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings, Customer } from '../types';
 import { useCompanySettings } from '../hooks';
-import { formatCurrency, formatDate, amountToWords } from '../services';
-import { Icons, FormInput, FormTextarea, FormSelect } from './common';
+import { formatCurrency, formatDate, amountToWords, supabaseService } from '../services';
+import { Icons, FormInput, FormTextarea, FormSelect, Modal, Spinner } from './common';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -39,6 +39,24 @@ const INDIAN_STATES = [
 
 export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, passengers, onClose, onSaveInvoice }) => {
   const { settings, getNextInvoiceNumber } = useCompanySettings();
+
+  // Customers
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState<Omit<Customer, 'customer_id' | 'created_at'>>({ name: '', address: '', gst_number: '', email: '', phone: '' });
+  const [addingCustomer, setAddingCustomer] = useState(false);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      setCustomersLoading(true);
+      const { data } = await supabaseService.listCustomers();
+      setCustomers(data || []);
+      setCustomersLoading(false);
+    };
+    loadCustomers();
+  }, []);
 
   // Component State
   const [invoiceNumber, setInvoiceNumber] = useState(() => generateInvoiceNumber(settings.lastInvoiceNumber));
@@ -128,6 +146,21 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       }
   }, [billedToPassengerId, passengers]);
 
+  // When selecting a customer from master
+  useEffect(() => {
+    if (!selectedCustomerId) return;
+    const selected = customers.find(c => c.customer_id === selectedCustomerId);
+    if (selected) {
+      setBilledToDetails({
+        name: selected.name,
+        address: selected.address,
+        email: selected.email || '',
+        phone: selected.phone || '',
+        gstin: selected.gst_number || ''
+      });
+    }
+  }, [selectedCustomerId, customers]);
+
   const handleBilledToChange = (field: keyof BilledTo, value: string) => {
     setBilledToDetails(prev => {
         const newDetails: BilledTo = prev ? { ...prev } : { name: '', address: '', email: '', phone: '', gstin: '' };
@@ -179,7 +212,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
   const handleSaveAndDownload = async () => {
     if (!billedToDetails || !billedToDetails.name) {
-      alert("Please select and confirm a passenger to bill to.");
+      alert("Please select a customer or fill in the billed to details.");
       return;
     }
 
@@ -202,7 +235,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       gstType,
       companySettings: { ...settings },
       terms,
-      dueDate
+      dueDate,
+      customerId: selectedCustomerId || undefined
     };
     
     onSaveInvoice(newInvoice);
@@ -252,7 +286,6 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     }
   };
 
-
   const handleLineItemChange = (id: string, field: keyof InvoiceLineItem, value: string | number | boolean) => {
       setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
@@ -262,11 +295,24 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const removeLineItem = (id: string) => {
       setLineItems(prev => prev.filter(item => item.id !== id));
   };
-  
-  // Helpers for line totals
-  const lineNet = (item: InvoiceLineItem) => (Number(item.quantity) || 0) * (Number(item.rate) || 0);
-  const lineTax = (item: InvoiceLineItem) => item.isGstApplicable && item.gstRate ? lineNet(item) * (item.gstRate / 100) : 0;
-  const lineGross = (item: InvoiceLineItem) => lineNet(item) + lineTax(item);
+
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name || !newCustomer.address) {
+      alert('Please fill in Name and Address for the new customer.');
+      return;
+    }
+    setAddingCustomer(true);
+    const { data, error } = await supabaseService.addCustomer(newCustomer);
+    setAddingCustomer(false);
+    if (error || !data) {
+      alert(error || 'Failed to add customer.');
+      return;
+    }
+    setCustomers(prev => [data, ...prev]);
+    setSelectedCustomerId(data.customer_id);
+    setAddCustomerOpen(false);
+    setNewCustomer({ name: '', address: '', gst_number: '', email: '', phone: '' });
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4">
@@ -282,6 +328,23 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
           {/* Form Side */}
           <div className="w-full lg:w-2/5 p-4 sm:p-6 bg-white overflow-y-auto print:hidden">
                 <div className="max-w-4xl mx-auto space-y-8">
+                    {/* Customer Master Selection */}
+                    <div className="border rounded-lg p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-md font-semibold text-slate-700">Select Customer / Add Customer</h3>
+                        <button onClick={() => setAddCustomerOpen(true)} className="text-sm font-semibold text-brand-primary">{Icons.plus} Add New Customer</button>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <FormSelect label="Customer Master" value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
+                            <option value="">-- Select from Customer Master --</option>
+                            {customers.map(c => (<option key={c.customer_id} value={c.customer_id}>{c.name}</option>))}
+                          </FormSelect>
+                        </div>
+                        {customersLoading && <Spinner size="sm" />}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {/* Customer Column */}
                         <div className="space-y-4">
@@ -304,6 +367,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                             />
                             <FormInput label="Email" value={billedToDetails?.email || ''} onChange={e => handleBilledToChange('email', e.target.value)} />
                             <FormInput label="Phone" value={billedToDetails?.phone || ''} onChange={e => handleBilledToChange('phone', e.target.value)} />
+                            <FormInput label="GSTIN" value={billedToDetails?.gstin || ''} onChange={e => handleBilledToChange('gstin', e.target.value)} />
                         </div>
                         {/* Invoice Details Column */}
                         <div className="grid grid-cols-2 gap-4">
@@ -416,6 +480,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                             {billedToDetails.address && <p className="text-slate-700 whitespace-pre-line">{billedToDetails.address}</p>}
                             {billedToDetails.email && <p className="text-slate-700">{billedToDetails.email}</p>}
                             {billedToDetails.phone && <p className="text-slate-700">{billedToDetails.phone}</p>}
+                            {billedToDetails.gstin && <p className="text-slate-700">GSTIN: {billedToDetails.gstin}</p>}
                         </div>
                     ) : <p className="text-slate-400 italic">Select a customer</p>}
                 </div>
@@ -516,6 +581,21 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
           </div>
         </div>
       </div>
+
+      {/* Add Customer Modal */}
+      <Modal isOpen={addCustomerOpen} onClose={() => setAddCustomerOpen(false)} title="Add New Customer">
+        <div className="space-y-4">
+          <FormInput label="Customer Name*" value={newCustomer.name} onChange={e => setNewCustomer(prev => ({...prev, name: e.target.value}))} />
+          <FormTextarea label="Address*" value={newCustomer.address} onChange={e => setNewCustomer(prev => ({...prev, address: e.target.value}))} rows={3} />
+          <FormInput label="GST Number" value={newCustomer.gst_number} onChange={e => setNewCustomer(prev => ({...prev, gst_number: e.target.value}))} />
+          <FormInput label="Email" value={newCustomer.email || ''} onChange={e => setNewCustomer(prev => ({...prev, email: e.target.value}))} />
+          <FormInput label="Phone" value={newCustomer.phone || ''} onChange={e => setNewCustomer(prev => ({...prev, phone: e.target.value}))} />
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setAddCustomerOpen(false)} className="px-4 py-2 bg-slate-200 rounded-md">Cancel</button>
+            <button onClick={handleAddCustomer} disabled={addingCustomer} className="px-4 py-2 bg-brand-primary text-white rounded-md disabled:opacity-70">{addingCustomer ? 'Saving...' : 'Save Customer'}</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

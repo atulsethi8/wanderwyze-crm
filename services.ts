@@ -174,7 +174,18 @@ export const supabaseService = {
     return { error: error ? error.message : null };
   },
 
-  getUserProfile
+  getUserProfile,
+
+  // Customer Master
+  async listCustomers(): Promise<{ data: import('./types').Customer[]; error: string | null }> {
+    const { data, error } = await supabase.from('customer_master').select('*').order('created_at', { ascending: false });
+    return { data: (data || []) as unknown as import('./types').Customer[], error: error ? error.message : null };
+  },
+  async addCustomer(customer: Omit<import('./types').Customer, 'customer_id' | 'created_at'>): Promise<{ data: import('./types').Customer | null; error: string | null }> {
+    const payload = { ...customer } as any;
+    const { data, error } = await supabase.from('customer_master').insert([payload]).select().single();
+    return { data: (data || null) as unknown as import('./types').Customer | null, error: error ? error.message : null };
+  }
 };
 
 
