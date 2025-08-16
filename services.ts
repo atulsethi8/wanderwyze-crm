@@ -207,8 +207,6 @@ export const supabaseService = {
 
   // Invoice Master
   async addInvoice(invoice: import('./types').Invoice, userId: string): Promise<{ data: any; error: string | null }> {
-    console.log("addInvoice called with:", { invoice, userId });
-    
     const payload = {
       invoice_number: invoice.invoiceNumber,
       docket_id: invoice.docketId,
@@ -228,16 +226,8 @@ export const supabaseService = {
       created_by: userId
     };
     
-    console.log("Database payload:", payload);
-    
-    try {
-      const { data, error } = await supabase.from('invoice_master').insert([payload]).select().single();
-      console.log("Database response:", { data, error });
-      return { data: data || null, error: error ? error.message : null };
-    } catch (err) {
-      console.error("Exception in addInvoice:", err);
-      return { data: null, error: err instanceof Error ? err.message : 'Unknown error' };
-    }
+    const { data, error } = await supabase.from('invoice_master').insert([payload]).select().single();
+    return { data: data || null, error: error ? error.message : null };
   },
   async getInvoicesByDocket(docketId: string): Promise<{ data: any[]; error: string | null }> {
     const { data, error } = await supabase
