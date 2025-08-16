@@ -533,20 +533,10 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         }
     };
     
-    const handleSaveInvoice = async (invoice: Invoice) => {
+    const handleSaveInvoice = async (invoice: Invoice, customerId: string) => {
         try {
-            // Find the customer ID from the billedTo details
-            const customer = customers.find(c => 
-                c.name === invoice.billedTo.name && 
-                c.email === invoice.billedTo.email
-            );
-            
-            if (!customer) {
-                throw new Error('Customer not found in database. Please ensure the customer is saved first.');
-            }
-
-            // Save invoice to database
-            await saveInvoice(invoice, docket!.id, customer.customer_id);
+            // Save invoice to database with the customer ID provided by InvoiceGenerator
+            await saveInvoice(invoice, docket!.id, customerId);
 
             // Update local state
             setFormState(p => ({

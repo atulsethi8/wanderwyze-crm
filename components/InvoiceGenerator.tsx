@@ -13,7 +13,7 @@ interface InvoiceGeneratorProps {
   customers: Customer[];
   saveCustomer: (customer: Omit<Customer, 'customer_id' | 'created_at'>) => Promise<string>;
   onClose: () => void;
-  onSaveInvoice: (invoice: Invoice) => void;
+  onSaveInvoice: (invoice: Invoice, customerId: string) => void;
 }
 
 const generateInvoiceNumber = (lastNumber: number) => {
@@ -47,6 +47,14 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const [invoiceNumber, setInvoiceNumber] = useState(() => generateInvoiceNumber(settings.lastInvoiceNumber));
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [billedToDetails, setBilledToDetails] = useState<BilledTo | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [formData, setFormData] = useState({
+    customerName: '',
+    customerAddress: '',
+    customerEmail: '',
+    customerPhone: '',
+    customerGst: ''
+  });
   const [placeOfSupply, setPlaceOfSupply] = useState('');
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
   const [notes, setNotes] = useState("Thank you for your business. All payments are non-refundable.");
@@ -129,17 +137,25 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       }
   }, [billedToDetails]);
 
-  const handleBilledToChange = (field: keyof BilledTo, value: string) => {
-    setBilledToDetails(prev => {
-        const newDetails: BilledTo = prev ? { ...prev } : { name: '', address: '', email: '', phone: '', gstin: '' };
-        (newDetails as any)[field] = value;
-        return newDetails;
-    });
-  };
-
   const handleCustomerSelect = (billedTo: BilledTo) => {
     setBilledToDetails(billedTo);
     setShowCustomerSelector(false);
+    
+    // Find the selected customer from the customers array
+    const customer = customers.find(c => 
+      c.name === billedTo.name && 
+      c.email === billedTo.email
+    );
+    setSelectedCustomer(customer || null);
+    
+    // Populate form data with customer details
+    setFormData({
+      customerName: billedTo.name || '',
+      customerAddress: billedTo.address || '',
+      customerEmail: billedTo.email || '',
+      customerPhone: billedTo.phone || '',
+      customerGst: billedTo.gstin || ''
+    });
     
     // Auto-set place of supply from address
     if (billedTo.address) {
@@ -193,77 +209,131 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const formatPercent = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '')}%`;
 
   const handleSaveAndDownload = async () => {
-    if (!billedToDetails || !billedToDetails.name) {
-      alert("Please select and confirm a customer to bill to.");
+    if (!formData.customerName.trim()) {
+      alert("Please enter a customer name.");
       return;
     }
 
-    const nextInvoiceNum = await getNextInvoiceNumber();
-    const finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
-    
-    setInvoiceNumber(finalInvoiceNumber); // Set for immediate preview update
-    
-    const newInvoice: Invoice = {
-      id: `INV-${Date.now()}`,
-      invoiceNumber: finalInvoiceNumber,
-      date: invoiceDate,
-      billedTo: billedToDetails,
-      lineItems,
-      notes,
-      placeOfSupply,
-      subtotal: financialTotals.subtotal,
-      gstAmount: financialTotals.gstAmount,
-      grandTotal: financialTotals.grandTotal,
-      gstType,
-      companySettings: { ...settings },
-      terms,
-      dueDate
-    };
-    
-    onSaveInvoice(newInvoice);
-
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    const invoiceElement = document.getElementById('invoice-preview');
-    if (!invoiceElement) {
-      alert('Could not find invoice element to download.');
-      return;
-    }
-
+    setLoading(true);
     try {
-      const canvas = await html2canvas(invoiceElement, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      // Step 1: Upsert customer data
+      let customerId: string;
+      
+      if (selectedCustomer) {
+        // Update existing customer if data has changed
+        const hasChanges = 
+          selectedCustomer.name !== formData.customerName ||
+          selectedCustomer.address !== formData.customerAddress ||
+          selectedCustomer.email !== formData.customerEmail ||
+          selectedCustomer.phone !== formData.customerPhone ||
+          selectedCustomer.gst_number !== formData.customerGst;
+        
+        if (hasChanges) {
+          // For now, we'll create a new customer record
+          // In a full implementation, you might want to add an updateCustomer function
+          customerId = await saveCustomer({
+            name: formData.customerName,
+            address: formData.customerAddress,
+            email: formData.customerEmail,
+            phone: formData.customerPhone,
+            gst_number: formData.customerGst
+          });
+        } else {
+          customerId = selectedCustomer.customer_id;
+        }
+      } else {
+        // Create new customer
+        customerId = await saveCustomer({
+          name: formData.customerName,
+          address: formData.customerAddress,
+          email: formData.customerEmail,
+          phone: formData.customerPhone,
+          gst_number: formData.customerGst
+        });
+      }
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      // Step 2: Generate invoice number
+      const nextInvoiceNum = await getNextInvoiceNumber();
+      const finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
+      
+      setInvoiceNumber(finalInvoiceNumber); // Set for immediate preview update
+      
+      // Step 3: Create invoice object with current form data
+      const newInvoice: Invoice = {
+        id: `INV-${Date.now()}`,
+        invoiceNumber: finalInvoiceNumber,
+        date: invoiceDate,
+        billedTo: {
+          name: formData.customerName,
+          address: formData.customerAddress,
+          email: formData.customerEmail,
+          phone: formData.customerPhone,
+          gstin: formData.customerGst
+        },
+        lineItems,
+        notes,
+        placeOfSupply,
+        subtotal: financialTotals.subtotal,
+        gstAmount: financialTotals.gstAmount,
+        grandTotal: financialTotals.grandTotal,
+        gstType,
+        companySettings: { ...settings },
+        terms,
+        dueDate
+      };
+      
+      // Step 4: Save invoice
+      onSaveInvoice(newInvoice, customerId);
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pageHeight;
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
+      // Step 5: Generate PDF
+      const invoiceElement = document.getElementById('invoice-preview');
+      if (!invoiceElement) {
+        alert('Could not find invoice element to download.');
+        return;
+      }
+
+      try {
+        const canvas = await html2canvas(invoiceElement, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pageHeight;
-      }
 
-      // Add page numbers
-      const totalPages = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(10);
-        pdf.setTextColor(120);
-        pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
-      }
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
 
-      pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+        // Add page numbers
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          pdf.setFontSize(10);
+          pdf.setTextColor(120);
+          pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
+        }
+
+        pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        alert("An error occurred while generating the PDF.");
+      }
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("An error occurred while generating the PDF.");
+      console.error("Error saving invoice:", error);
+      alert(`Failed to save invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -289,7 +359,20 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
         <div className="p-4 bg-white border-b flex justify-between items-center print:hidden flex-wrap gap-2">
           <h2 className="text-xl font-bold text-slate-800">Invoice Generator</h2>
           <div>
-            <button onClick={handleSaveAndDownload} className="bg-brand-primary text-white px-4 py-2 rounded-md mr-2 text-sm font-semibold">Save & Download PDF</button>
+            <button 
+              onClick={handleSaveAndDownload} 
+              disabled={loading}
+              className="bg-brand-primary text-white px-4 py-2 rounded-md mr-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Processing...
+                </>
+              ) : (
+                'Save & Download PDF'
+              )}
+            </button>
             <button onClick={onClose} className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md text-sm">Close</button>
           </div>
         </div>
@@ -304,16 +387,16 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Select Customer *
                                 </label>
-                                {billedToDetails ? (
+                                {(formData.customerName || selectedCustomer) ? (
                                     <div className="p-3 border border-gray-300 rounded-md bg-gray-50">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <div className="font-medium text-gray-900">{billedToDetails.name}</div>
-                                                {billedToDetails.email && (
-                                                    <div className="text-sm text-gray-500">{billedToDetails.email}</div>
+                                                <div className="font-medium text-gray-900">{formData.customerName || selectedCustomer?.name}</div>
+                                                {(formData.customerEmail || selectedCustomer?.email) && (
+                                                    <div className="text-sm text-gray-500">{formData.customerEmail || selectedCustomer?.email}</div>
                                                 )}
-                                                {billedToDetails.phone && (
-                                                    <div className="text-sm text-gray-500">{billedToDetails.phone}</div>
+                                                {(formData.customerPhone || selectedCustomer?.phone) && (
+                                                    <div className="text-sm text-gray-500">{formData.customerPhone || selectedCustomer?.phone}</div>
                                                 )}
                                             </div>
                                             <button
@@ -338,20 +421,32 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                             </div>
                             <FormInput 
                                 label="Customer Name*" 
-                                value={billedToDetails?.name || ''} 
-                                onChange={e => handleBilledToChange('name', e.target.value)}
+                                value={formData.customerName ?? selectedCustomer?.name ?? ""} 
+                                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                                 placeholder="Enter customer's full name"
                             />
                             <FormTextarea
                                 label="Customer Address*"
-                                value={billedToDetails?.address || ''}
-                                onChange={e => handleBilledToChange('address', e.target.value)}
+                                value={formData.customerAddress ?? selectedCustomer?.address ?? ""}
+                                onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
                                 placeholder="Enter customer's billing address"
                                 rows={3}
                             />
-                            <FormInput label="Email" value={billedToDetails?.email || ''} onChange={e => handleBilledToChange('email', e.target.value)} />
-                            <FormInput label="Phone" value={billedToDetails?.phone || ''} onChange={e => handleBilledToChange('phone', e.target.value)} />
-                            <FormInput label="GST Number" value={billedToDetails?.gstin || ''} onChange={e => handleBilledToChange('gstin', e.target.value)} />
+                            <FormInput 
+                                label="Email" 
+                                value={formData.customerEmail ?? selectedCustomer?.email ?? ""} 
+                                onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })} 
+                            />
+                            <FormInput 
+                                label="Phone" 
+                                value={formData.customerPhone ?? selectedCustomer?.phone ?? ""} 
+                                onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })} 
+                            />
+                            <FormInput 
+                                label="GST Number" 
+                                value={formData.customerGst ?? selectedCustomer?.gst_number ?? ""} 
+                                onChange={(e) => setFormData({ ...formData, customerGst: e.target.value })} 
+                            />
                         </div>
                         {/* Invoice Details Column */}
                         <div className="grid grid-cols-2 gap-4">
