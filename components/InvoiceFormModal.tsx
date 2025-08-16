@@ -38,7 +38,41 @@ const INDIAN_STATES = [
 ];
 
 export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ docketId, docket, passengers, onClose, onSaveInvoice }) => {
+  console.log("InvoiceFormModal rendered with:", { docketId, docket: docket?.id, passengersCount: passengers?.length });
+  
+  // Validate required props
+  if (!docket || !docketId) {
+    console.error("InvoiceFormModal: Missing required docket or docketId");
+    return (
+      <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Invalid Docket</h2>
+          <p className="text-slate-600 mb-4">Docket information is missing. Please try again.</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { settings, getNextInvoiceNumber } = useCompanySettings();
+  
+  // Validate settings
+  if (!settings) {
+    console.error("InvoiceFormModal: Company settings not loaded");
+    return (
+      <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Loading Settings</h2>
+          <p className="text-slate-600 mb-4">Company settings are being loaded. Please wait...</p>
+          <div className="flex justify-center">
+            <Spinner size="lg" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Step management
   const [currentStep, setCurrentStep] = useState<'customer' | 'invoice'>('customer');
@@ -580,8 +614,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ docketId, do
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-4">
+  try {
+    return (
+      <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
           <h2 className="text-xl font-bold text-slate-800">Generate Invoice</h2>
@@ -746,5 +781,19 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ docketId, do
         </Modal>
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error("Error rendering InvoiceFormModal:", error);
+    return (
+      <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Error Loading Invoice Form</h2>
+          <p className="text-slate-600 mb-4">There was an error loading the invoice form. Please try again.</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };

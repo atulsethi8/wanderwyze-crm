@@ -822,6 +822,46 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         }
     };
 
+    // Add loading and error state checks
+    if (loading) {
+        return (
+            <div className="flex flex-col lg:flex-row h-full bg-slate-100">
+                <div className="flex-grow lg:w-2/3 p-4 sm:p-6 overflow-y-auto">
+                    <div className="flex justify-center items-center h-full">
+                        <div className="text-center">
+                            <Spinner size="lg" />
+                            <p className="mt-4 text-slate-600 font-semibold">Loading docket...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Add error state check (if docket is expected but not found)
+    if (docket === null && window.location.hash.includes('/dockets/') && window.location.hash.includes('/details')) {
+        return (
+            <div className="flex flex-col lg:flex-row h-full bg-slate-100">
+                <div className="flex-grow lg:w-2/3 p-4 sm:p-6 overflow-y-auto">
+                    <div className="flex justify-center items-center h-full">
+                        <div className="text-center">
+                            <div className="text-red-500 mb-4">
+                                <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-slate-800 mb-2">Docket Not Found</h2>
+                            <p className="text-slate-600 mb-4">The docket you're looking for could not be found or may have been deleted.</p>
+                            <button onClick={onClose} className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-blue-700">
+                                Go Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
     <>
         {showSaveSuccess && (
