@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent } from '../types';
+import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent, Customer } from '../types';
 import { INITIAL_DOCKET_FORM_STATE, LEAD_SOURCES } from '../constants';
 import { formatCurrency, formatDate, getNumberOfNights, toBase64, geminiService, amountToWords, formatDateTimeIST } from '../services';
 import { useAuth } from '../hooks';
@@ -16,6 +16,9 @@ interface DocketFormProps {
   suppliers: Supplier[];
   saveSupplier: (supplier: Omit<Supplier, 'id'>) => void;
   agents: Agent[];
+  customers: Customer[];
+  saveCustomer: (customer: Omit<Customer, 'customer_id' | 'created_at'>) => Promise<string>;
+  saveInvoice: (invoice: Invoice, docketId: string, customerId: string) => Promise<any>;
   loading: boolean;
   forceReadOnly?: boolean;
   readOnlyBanner?: string;
@@ -116,7 +119,7 @@ const AddPaxToFlightModalContent: React.FC<{
 
 
 // --- MAIN DOCKET FORM COMPONENT ---
-export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete, onClose, suppliers, saveSupplier, agents, loading: isSaving, forceReadOnly, readOnlyBanner }) => {
+export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete, onClose, suppliers, saveSupplier, agents, customers, saveCustomer, saveInvoice, loading: isSaving, forceReadOnly, readOnlyBanner }) => {
     const { currentUser } = useAuth();
     const [formState, setFormState] = useState<Omit<Docket, 'id' | 'searchTags' | 'createdAt' | 'updatedAt'>>(INITIAL_DOCKET_FORM_STATE);
     const [activeTab, setActiveTab] = useState('details');
@@ -530,11 +533,33 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         }
     };
     
-    const handleSaveInvoice = (invoice: Invoice) => {
-        setFormState(p => ({
-            ...p,
-            invoices: [...(p.invoices || []), invoice]
-        }));
+    const handleSaveInvoice = async (invoice: Invoice) => {
+        try {
+            // Find the customer ID from the billedTo details
+            const customer = customers.find(c => 
+                c.name === invoice.billedTo.name && 
+                c.email === invoice.billedTo.email
+            );
+            
+            if (!customer) {
+                throw new Error('Customer not found in database. Please ensure the customer is saved first.');
+            }
+
+            // Save invoice to database
+            await saveInvoice(invoice, docket!.id, customer.customer_id);
+
+            // Update local state
+            setFormState(p => ({
+                ...p,
+                invoices: [...(p.invoices || []), invoice]
+            }));
+
+            // Show success message
+            alert('Invoice saved successfully!');
+        } catch (error) {
+            console.error('Error saving invoice:', error);
+            alert(`Failed to save invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     };
 
     const handleSaveClick = async () => {
@@ -1031,6 +1056,8 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             <InvoiceGenerator 
                 docket={docket}
                 passengers={formState.passengers}
+                customers={customers}
+                saveCustomer={saveCustomer}
                 onClose={() => setInvoiceModalOpen(false)}
                 onSaveInvoice={handleSaveInvoice}
             />

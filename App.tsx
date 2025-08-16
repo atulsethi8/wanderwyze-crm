@@ -14,6 +14,7 @@ import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
 import { ChangePasswordPage } from './components/ChangePasswordPage';
+import { CustomerManagementPage } from './components/CustomerManagementPage';
 import { usingDefaultKeys } from './services';
 
 /**
@@ -63,7 +64,7 @@ API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 
 const AppContent: React.FC = () => {
     const { currentUser, loading: authLoading, hasSession } = useAuth();
-    const { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, users, updateUserRole, deletionLog, loading: docketsLoading } = useDockets();
+    const { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, customers, saveCustomer, deleteCustomer, saveInvoice, users, updateUserRole, deletionLog, loading: docketsLoading } = useDockets();
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedDocketId, setSelectedDocketId] = useState<string | null>(null);
 
@@ -166,6 +167,9 @@ const AppContent: React.FC = () => {
                     suppliers={suppliers}
                     saveSupplier={saveSupplier}
                     agents={agents}
+                    customers={customers}
+                    saveCustomer={saveCustomer}
+                    saveInvoice={saveInvoice}
                     loading={docketsLoading}
                 />;
             case 'reports':
@@ -176,6 +180,8 @@ const AppContent: React.FC = () => {
                 return currentUser.role === 'admin' ? <ChangePasswordPage /> : <p>Access Denied</p>;
             case 'agents':
                 return currentUser.role === 'admin' ? <AgentManagementPage agents={agents} saveAgent={saveAgent} /> : <p>Access Denied</p>;
+            case 'customers':
+                return currentUser.role === 'admin' ? <CustomerManagementPage customers={customers} saveCustomer={saveCustomer} deleteCustomer={deleteCustomer} /> : <p>Access Denied</p>;
             case 'users':
                 return currentUser.role === 'admin' ? <UserManagementPage users={users} updateUserRole={updateUserRole} /> : <p>Access Denied</p>;
             case 'calendar':

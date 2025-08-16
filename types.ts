@@ -68,6 +68,16 @@ export interface Agent {
   contactInfo: string;
 }
 
+export interface Customer {
+  customer_id: string;
+  name: string;
+  address?: string;
+  gst_number?: string;
+  email?: string;
+  phone?: string;
+  created_at: string;
+}
+
 export interface FlightPassengerDetail {
     passengerId: string;
     passengerType: PassengerType;

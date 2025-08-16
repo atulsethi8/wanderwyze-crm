@@ -3,7 +3,7 @@
 
 
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
-import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent } from './types';
+import { AuthUser, Docket, DocketDeletionLog, CompanySettings, Supplier, Agent, Customer } from './types';
 import { supabase, supabaseService } from './services';
 import { DEFAULT_COMPANY_SETTINGS } from './constants';
 import { Database } from './database.types';
@@ -170,6 +170,7 @@ export const useDockets = () => {
   const [dockets, setDockets] = useState<Docket[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [deletionLog, setDeletionLog] = useState<DocketDeletionLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,6 +188,7 @@ export const useDockets = () => {
                     supabase.from('dockets').select('*').order('created_at', { ascending: false }),
                     supabase.from('suppliers').select('*'),
                     supabase.from('agents').select('*'),
+                    supabase.from('customer_master').select('*').order('created_at', { ascending: false }),
                     supabase.from('profiles').select('id, name, email, role')
                 ];
 
@@ -198,7 +200,7 @@ export const useDockets = () => {
                         supabase.from('deletion_log').select('*')
                     ];
 
-                    const [docketsRes, suppliersRes, agentsRes, profilesRes, deletionLogRes] = await Promise.all(adminPromises);
+                    const [docketsRes, suppliersRes, agentsRes, customersRes, profilesRes, deletionLogRes] = await Promise.all(adminPromises);
 
                     // Set state for admin-specific data
                     if (deletionLogRes.error) throw deletionLogRes.error;
@@ -224,13 +226,16 @@ export const useDockets = () => {
                     if (agentsRes.error) throw agentsRes.error;
                     if (agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
 
+                    if (customersRes.error) throw customersRes.error;
+                    if (customersRes.data) setCustomers(customersRes.data);
+
                     if (profilesRes.error) throw profilesRes.error;
                     if (profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
 
                 } else {
                     // --- REGULAR USER DATA FETCHING ---
                     // Regular users fetch everything EXCEPT the deletion log
-                    const [docketsRes, suppliersRes, agentsRes, profilesRes] = await Promise.all(basePromises);
+                    const [docketsRes, suppliersRes, agentsRes, customersRes, profilesRes] = await Promise.all(basePromises);
 
                     // Set the deletion log to empty for non-admins
                     setDeletionLog([]);
@@ -244,6 +249,9 @@ export const useDockets = () => {
 
                     if (agentsRes.error) throw agentsRes.error;
                     if (agentsRes.data) setAgents(agentsRes.data.map(mapDbAgentToAppAgent));
+
+                    if (customersRes.error) throw customersRes.error;
+                    if (customersRes.data) setCustomers(customersRes.data);
 
                     if (profilesRes.error) throw profilesRes.error;
                     if (profilesRes.data) setUsers(profilesRes.data as AuthUser[]);
@@ -261,6 +269,7 @@ export const useDockets = () => {
         setDockets([]);
         setSuppliers([]);
         setAgents([]);
+        setCustomers([]);
         setUsers([]);
         setDeletionLog([]);
     }
@@ -386,6 +395,57 @@ export const useDockets = () => {
     if(data) setAgents(prev => [...prev, mapDbAgentToAppAgent(data)]);
   }, []);
 
+  const saveCustomer = useCallback(async (customer: Omit<Customer, 'customer_id' | 'created_at'>) => {
+    const newCustomer = { 
+      ...customer, 
+      customer_id: `CUST-${Date.now()}`,
+      created_at: new Date().toISOString()
+    };
+    const { data, error } = await supabase.from('customer_master').insert([newCustomer]).select().single();
+    if (error) throw error;
+    if(data) {
+      setCustomers(prev => [data, ...prev]);
+      return data.customer_id;
+    }
+    throw new Error('Failed to create customer');
+  }, []);
+
+  const deleteCustomer = useCallback(async (customerId: string) => {
+    const { error } = await supabase.from('customer_master').delete().eq('customer_id', customerId);
+    if (error) throw error;
+    setCustomers(prev => prev.filter(c => c.customer_id !== customerId));
+  }, []);
+
+  const saveInvoice = useCallback(async (invoice: Invoice, docketId: string, customerId: string) => {
+    const { currentUser } = useAuth();
+    if (!currentUser) throw new Error('User must be logged in to save invoice');
+
+    const invoiceData = {
+      invoice_id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      docket_id: docketId,
+      customer_id: customerId,
+      invoice_date: invoice.date,
+      due_date: invoice.dueDate,
+      billed_to: invoice.billedTo,
+      line_items: invoice.lineItems,
+      subtotal: invoice.subtotal,
+      gst_amount: invoice.gstAmount,
+      grand_total: invoice.grandTotal,
+      gst_type: invoice.gstType,
+      place_of_supply: invoice.placeOfSupply,
+      terms: invoice.terms,
+      notes: invoice.notes,
+      company_settings_snapshot: invoice.companySettings,
+      created_at: new Date().toISOString(),
+      created_by: currentUser.id
+    };
+
+    const { data, error } = await supabase.from('invoice_master').insert([invoiceData]).select().single();
+    if (error) throw error;
+    return data;
+  }, []);
+
   const updateUserRole = useCallback(async (userId: string, role: 'admin' | 'user') => {
     const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
     if (error) {
@@ -400,7 +460,7 @@ export const useDockets = () => {
     }
   }, [currentUser]);
 
-  return { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, users, updateUserRole, deletionLog, loading };
+  return { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, customers, saveCustomer, deleteCustomer, saveInvoice, users, updateUserRole, deletionLog, loading };
 };
 
 export const useCompanySettings = () => {

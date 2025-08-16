@@ -1,14 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings } from '../types';
+import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings, Customer } from '../types';
 import { useCompanySettings } from '../hooks';
 import { formatCurrency, formatDate, amountToWords } from '../services';
-import { Icons, FormInput, FormTextarea, FormSelect } from './common';
+import { Icons, FormInput, FormTextarea, FormSelect, Modal, Spinner } from './common';
+import { CustomerSelector } from './CustomerSelector';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 interface InvoiceGeneratorProps {
   docket: Docket;
   passengers: Passenger[];
+  customers: Customer[];
+  saveCustomer: (customer: Omit<Customer, 'customer_id' | 'created_at'>) => Promise<string>;
   onClose: () => void;
   onSaveInvoice: (invoice: Invoice) => void;
 }
@@ -37,13 +40,12 @@ const INDIAN_STATES = [
 ];
 
 
-export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, passengers, onClose, onSaveInvoice }) => {
+export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, passengers, customers, saveCustomer, onClose, onSaveInvoice }) => {
   const { settings, getNextInvoiceNumber } = useCompanySettings();
 
   // Component State
   const [invoiceNumber, setInvoiceNumber] = useState(() => generateInvoiceNumber(settings.lastInvoiceNumber));
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
-  const [billedToPassengerId, setBilledToPassengerId] = useState<string>('');
   const [billedToDetails, setBilledToDetails] = useState<BilledTo | null>(null);
   const [placeOfSupply, setPlaceOfSupply] = useState('');
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
@@ -51,6 +53,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const [gstType, setGstType] = useState<'IGST' | 'CGST/SGST'>('IGST');
   const [terms, setTerms] = useState('Due on Receipt');
   const [dueDate, setDueDate] = useState('');
+  const [showCustomerSelector, setShowCustomerSelector] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Auto-set GST type based on Place of Supply vs Company State
   useEffect(() => {
@@ -104,29 +108,26 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
   // Update billing details when a passenger is selected
   useEffect(() => {
-      if (billedToPassengerId) {
-          const passenger = passengers.find(p => p.id === billedToPassengerId);
-          if (passenger) {
-              setBilledToDetails({
-                  name: passenger.fullName,
-                  email: passenger.email || '',
-                  phone: passenger.phone || '',
-                  address: passenger.address || '',
-                  gstin: passenger.gstin || ''
-              });
-              if (passenger.address) {
-                 // Basic state extraction for place of supply
-                 const addressParts = passenger.address.split(',');
-                 const stateGuess = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : '';
-                 if (INDIAN_STATES.map(s => s.toLowerCase()).includes(stateGuess.toLowerCase())) {
-                     setPlaceOfSupply(INDIAN_STATES.find(s => s.toLowerCase() === stateGuess.toLowerCase()) || '');
-                 }
-              }
+      if (billedToDetails) {
+          setBilledToDetails({
+              name: billedToDetails.name,
+              email: billedToDetails.email || '',
+              phone: billedToDetails.phone || '',
+              address: billedToDetails.address || '',
+              gstin: billedToDetails.gstin || ''
+          });
+          if (billedToDetails.address) {
+             // Basic state extraction for place of supply
+             const addressParts = billedToDetails.address.split(',');
+             const stateGuess = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : '';
+             if (INDIAN_STATES.map(s => s.toLowerCase()).includes(stateGuess.toLowerCase())) {
+                 setPlaceOfSupply(INDIAN_STATES.find(s => s.toLowerCase() === stateGuess.toLowerCase()) || '');
+             }
           }
       } else {
           setBilledToDetails(null);
       }
-  }, [billedToPassengerId, passengers]);
+  }, [billedToDetails]);
 
   const handleBilledToChange = (field: keyof BilledTo, value: string) => {
     setBilledToDetails(prev => {
@@ -134,6 +135,20 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
         (newDetails as any)[field] = value;
         return newDetails;
     });
+  };
+
+  const handleCustomerSelect = (billedTo: BilledTo) => {
+    setBilledToDetails(billedTo);
+    setShowCustomerSelector(false);
+    
+    // Auto-set place of supply from address
+    if (billedTo.address) {
+      const addressParts = billedTo.address.split(',');
+      const stateGuess = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : '';
+      if (INDIAN_STATES.map(s => s.toLowerCase()).includes(stateGuess.toLowerCase())) {
+        setPlaceOfSupply(INDIAN_STATES.find(s => s.toLowerCase() === stateGuess.toLowerCase()) || '');
+      }
+    }
   };
   
   const financialTotals = useMemo(() => {
@@ -179,7 +194,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
   const handleSaveAndDownload = async () => {
     if (!billedToDetails || !billedToDetails.name) {
-      alert("Please select and confirm a passenger to bill to.");
+      alert("Please select and confirm a customer to bill to.");
       return;
     }
 
@@ -285,10 +300,42 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {/* Customer Column */}
                         <div className="space-y-4">
-                             <FormSelect label="Quick-fill from Passenger" value={billedToPassengerId} onChange={e => setBilledToPassengerId(e.target.value)}>
-                                <option value="">-- Select Passenger to Autofill --</option>
-                                {passengers.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                            </FormSelect>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Select Customer *
+                                </label>
+                                {billedToDetails ? (
+                                    <div className="p-3 border border-gray-300 rounded-md bg-gray-50">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-medium text-gray-900">{billedToDetails.name}</div>
+                                                {billedToDetails.email && (
+                                                    <div className="text-sm text-gray-500">{billedToDetails.email}</div>
+                                                )}
+                                                {billedToDetails.phone && (
+                                                    <div className="text-sm text-gray-500">{billedToDetails.phone}</div>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => setShowCustomerSelector(true)}
+                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                            >
+                                                Change
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowCustomerSelector(true)}
+                                        className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            {Icons.userPlus}
+                                            <span>Select Customer</span>
+                                        </div>
+                                    </button>
+                                )}
+                            </div>
                             <FormInput 
                                 label="Customer Name*" 
                                 value={billedToDetails?.name || ''} 
@@ -304,6 +351,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                             />
                             <FormInput label="Email" value={billedToDetails?.email || ''} onChange={e => handleBilledToChange('email', e.target.value)} />
                             <FormInput label="Phone" value={billedToDetails?.phone || ''} onChange={e => handleBilledToChange('phone', e.target.value)} />
+                            <FormInput label="GST Number" value={billedToDetails?.gstin || ''} onChange={e => handleBilledToChange('gstin', e.target.value)} />
                         </div>
                         {/* Invoice Details Column */}
                         <div className="grid grid-cols-2 gap-4">
@@ -515,6 +563,16 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
             </div>
           </div>
         </div>
+
+        {/* Customer Selector Modal */}
+        <Modal isOpen={showCustomerSelector} onClose={() => setShowCustomerSelector(false)} title="Select Customer">
+          <CustomerSelector
+            passengers={passengers}
+            customers={customers}
+            onSelectCustomer={handleCustomerSelect}
+            onAddCustomer={saveCustomer}
+          />
+        </Modal>
       </div>
     </div>
   );

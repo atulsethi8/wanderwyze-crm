@@ -40,6 +40,35 @@ export interface Database {
           settings?: Json
         }
       }
+      customer_master: {
+        Row: {
+          customer_id: string
+          name: string
+          address: string | null
+          gst_number: string | null
+          email: string | null
+          phone: string | null
+          created_at: string
+        }
+        Insert: {
+          customer_id?: string
+          name: string
+          address?: string | null
+          gst_number?: string | null
+          email?: string | null
+          phone?: string | null
+          created_at?: string
+        }
+        Update: {
+          customer_id?: string
+          name?: string
+          address?: string | null
+          gst_number?: string | null
+          email?: string | null
+          phone?: string | null
+          created_at?: string
+        }
+      }
       deletion_log: {
         Row: {
           client_name: string
@@ -119,24 +148,86 @@ export interface Database {
           updated_at?: string
         }
       }
-      profiles: {
+      invoice_master: {
         Row: {
-          email: string | null
-          id: string
-          name: string
-          role: "admin" | "user"
+          invoice_id: string
+          invoice_number: string
+          docket_id: string
+          customer_id: string
+          invoice_date: string
+          due_date: string
+          billed_to: Json
+          line_items: Json
+          subtotal: number
+          gst_amount: number
+          grand_total: number
+          gst_type: string
+          place_of_supply: string
+          terms: string
+          notes: string
+          company_settings_snapshot: Json
+          created_at: string
+          created_by: string
         }
         Insert: {
-          email?: string | null
-          id: string
-          name: string
-          role: "admin" | "user"
+          invoice_id?: string
+          invoice_number: string
+          docket_id: string
+          customer_id: string
+          invoice_date: string
+          due_date: string
+          billed_to: Json
+          line_items: Json
+          subtotal: number
+          gst_amount: number
+          grand_total: number
+          gst_type: string
+          place_of_supply: string
+          terms: string
+          notes: string
+          company_settings_snapshot: Json
+          created_at?: string
+          created_by: string
         }
         Update: {
+          invoice_id?: string
+          invoice_number?: string
+          docket_id?: string
+          customer_id?: string
+          invoice_date?: string
+          due_date?: string
+          billed_to?: Json
+          line_items?: Json
+          subtotal?: number
+          gst_amount?: number
+          grand_total?: number
+          gst_type?: string
+          place_of_supply?: string
+          terms?: string
+          notes?: string
+          company_settings_snapshot?: Json
+          created_at?: string
+          created_by?: string
+        }
+      }
+      profiles: {
+        Row: {
+          id: string
+          email: string | null
+          name: string
+          role: string
+        }
+        Insert: {
+          id: string
           email?: string | null
+          name: string
+          role?: string
+        }
+        Update: {
           id?: string
+          email?: string | null
           name?: string
-          role?: "admin" | "user"
+          role?: string
         }
       }
       suppliers: {
