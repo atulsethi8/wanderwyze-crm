@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent } from '../types';
 import { INITIAL_DOCKET_FORM_STATE, LEAD_SOURCES } from '../constants';
-import { formatCurrency, formatDate, getNumberOfNights, toBase64, amountToWords, formatDateTimeIST } from '../services';
+import { formatCurrency, formatDate, getNumberOfNights, toBase64, geminiService, amountToWords, formatDateTimeIST } from '../services';
 import { useAuth } from '../hooks';
 import { Icons, Modal, Spinner, FormInput, FormTextarea, FormSelect } from './common';
 import { InvoiceGenerator } from './InvoiceGenerator';
