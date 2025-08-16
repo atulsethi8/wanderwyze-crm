@@ -44,7 +44,27 @@
   <script type="module" crossorigin src="/assets/index-DfsRA3Ra.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-tn0RQdqM.css">
 </head>
-<body class="bg-slate-50 text-slate-800">
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #0f172a; /* slate-900 */
+    --muted: #f1f5f9; /* slate-100 */
+    --muted-fg: #475569; /* slate-600 */
+    --border: #e2e8f0; /* slate-200 */
+    --brand-on: #ffffff;
+    --brand-hover: #1d4ed8; /* blue-700 */
+  }
+  .var-bg { background-color: var(--bg); }
+  .text-fg { color: var(--fg); }
+  .text-muted { color: var(--muted-fg); }
+  .text-muted-fg { color: var(--muted-fg); }
+  .ring-border { box-shadow: 0 0 0 1px var(--border) inset; }
+  .bg-muted { background-color: var(--muted); }
+  .var-btn { background-color: var(--muted); color: var(--fg); border: 1px solid var(--border); }
+  .text-on-brand { color: var(--brand-on); }
+  .hover\:bg-brand-hover:hover { background-color: var(--brand-hover); }
+</style>
+<body class="var-bg text-fg" data-theme="light">
     <div id="root"></div>
 </body>
 </html>

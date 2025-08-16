@@ -14,12 +14,6 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
     const { logout } = useAuth();
     const [profileOpen, setProfileOpen] = useState(false);
     const [adminOpen, setAdminOpen] = useState(false);
-    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('theme') as 'light' | 'dark' | null : null;
-        if (saved === 'light' || saved === 'dark') return saved;
-        const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        return prefersDark ? 'dark' : 'light';
-    });
     const profileRef = useRef<HTMLDivElement>(null);
     const adminRef = useRef<HTMLDivElement>(null);
 
@@ -37,13 +31,6 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const root = document.documentElement;
-        root.setAttribute('data-theme', theme);
-        try { localStorage.setItem('theme', theme); } catch {}
-    }, [theme]);
-
-    const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
 
     return (
         <header className="var-bg/80 backdrop-blur-lg shadow-sm sticky top-0 z-40">
@@ -85,9 +72,6 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                         </button>
                          <button onClick={onNewDocket} className="sm:hidden flex items-center justify-center bg-brand-primary text-on-brand w-10 h-10 rounded-full font-semibold hover:bg-brand-hover transition-colors">
                             {React.cloneElement(Icons.plus, { className: 'h-5 w-5'})}
-                        </button>
-                        <button onClick={toggleTheme} className="w-10 h-10 rounded-full flex items-center justify-center var-btn hover:opacity-90" title="Toggle Theme">
-                            <span className="text-lg">{theme === 'dark' ? '🌙' : '🌞'}</span>
                         </button>
                         <div className="relative" ref={profileRef}>
                             <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center text-left p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary">
