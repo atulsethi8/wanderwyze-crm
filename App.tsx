@@ -13,6 +13,7 @@ import { Spinner } from './components/common';
 import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
+import { ChangePasswordPage } from './components/ChangePasswordPage';
 import { usingDefaultKeys } from './services';
 
 /**
@@ -171,6 +172,8 @@ const AppContent: React.FC = () => {
                 return <ReportsDashboard dockets={dockets} agents={agents} onOpenDocket={(id) => { setSelectedDocketId(id); navigate('/form'); }} />;
             case 'settings':
                 return currentUser.role === 'admin' ? <CompanySettingsPage /> : <p>Access Denied</p>;
+            case 'change_password':
+                return currentUser.role === 'admin' ? <ChangePasswordPage /> : <p>Access Denied</p>;
             case 'agents':
                 return currentUser.role === 'admin' ? <AgentManagementPage agents={agents} saveAgent={saveAgent} /> : <p>Access Denied</p>;
             case 'users':
