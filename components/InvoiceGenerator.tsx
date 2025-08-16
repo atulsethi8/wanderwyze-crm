@@ -47,6 +47,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState<Omit<Customer, 'customer_id' | 'created_at'>>({ name: '', address: '', gst_number: '', email: '', phone: '' });
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -57,6 +61,34 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     };
     loadCustomers();
   }, []);
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return;
+    setSearching(true);
+    const { data, error } = await supabaseService.searchCustomers(searchTerm.trim());
+    if (!error) setCustomers(data || []);
+    setSearching(false);
+  };
+
+  const paxToCustomer = (fullName: string): Omit<Customer, 'customer_id' | 'created_at'> => ({ name: fullName, address: '', gst_number: '', email: '', phone: '' });
+
+  const addPaxToMaster = async (fullName: string) => {
+    try {
+      setAddingCustomer(true);
+      const payload = paxToCustomer(fullName);
+      const { data, error } = await supabaseService.addCustomer(payload);
+      if (error || !data) throw new Error(error || 'Failed to add');
+      setCustomers(prev => [data, ...prev]);
+      setSelectedCustomerId(data.customer_id);
+      setMessage('Customer added successfully.');
+      setTimeout(() => setMessage(null), 3000);
+    } catch (e: any) {
+      setErrorMessage(e?.message || 'Failed to add customer');
+      setTimeout(() => setErrorMessage(null), 4000);
+    } finally {
+      setAddingCustomer(false);
+    }
+  };
 
   // Component State
   const [invoiceNumber, setInvoiceNumber] = useState(() => generateInvoiceNumber(settings.lastInvoiceNumber));
@@ -338,6 +370,47 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                         <h3 className="text-md font-semibold text-slate-700">Select Customer / Add Customer</h3>
                         <button onClick={() => setAddCustomerOpen(true)} className="text-sm font-semibold text-brand-primary">{Icons.plus} Add New Customer</button>
                       </div>
+
+                      {message && (
+                        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 mb-3">{message}</div>
+                      )}
+                      {errorMessage && (
+                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-3">{errorMessage}</div>
+                      )}
+
+                      {/* Option A: Select from Pax */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Pick from Docket Pax</label>
+                        <div className="flex flex-wrap gap-2">
+                          {docket.passengers.map(p => {
+                            const existing = customers.find(c => c.name.toLowerCase() === p.fullName.toLowerCase());
+                            return (
+                              <div key={p.id} className="flex items-center gap-2 bg-white border rounded-md px-3 py-1">
+                                <button type="button" onClick={() => {
+                                  if (existing) {
+                                    setSelectedCustomerId(existing.customer_id);
+                                  } else {
+                                    setBilledToDetails({ name: p.fullName, address: p.address || '', email: p.email || '', phone: p.phone || '', gstin: p.gstin || '' });
+                                  }
+                                }} className="text-sm font-medium text-brand-primary hover:underline">{p.fullName}</button>
+                                {!existing && (
+                                  <button type="button" onClick={() => addPaxToMaster(p.fullName)} className="text-xs text-slate-600 hover:text-slate-900">Add to Master</button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Option B: Search from Customer Master */}
+                      <div className="flex items-end gap-2 mb-3">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-slate-600 mb-1">Search Customers (name / email / phone)</label>
+                          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-2 border bg-white border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-primary text-slate-900" placeholder="Type to search..." />
+                        </div>
+                        <button type="button" onClick={handleSearch} className="px-4 py-2 bg-slate-200 rounded-md">{searching ? 'Searching...' : 'Search'}</button>
+                      </div>
+
                       <div className="flex items-center gap-3">
                         <div className="flex-1">
                           <FormSelect label="Customer Master" value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>

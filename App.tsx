@@ -14,6 +14,7 @@ import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
 import { ChangePasswordPage } from './components/ChangePasswordPage';
+import { CustomerMasterPage } from './components/CustomerMasterPage';
 import { usingDefaultKeys } from './services';
 
 /**
@@ -191,6 +192,8 @@ const AppContent: React.FC = () => {
                 return currentUser.role === 'admin' ? <AgentManagementPage agents={agents} saveAgent={saveAgent} /> : <p>Access Denied</p>;
             case 'users':
                 return currentUser.role === 'admin' ? <UserManagementPage users={users} updateUserRole={updateUserRole} /> : <p>Access Denied</p>;
+            case 'customers':
+                return currentUser.role === 'admin' ? <CustomerMasterPage /> : <p>Access Denied</p>;
             case 'calendar':
                 return <PaxCalendar dockets={dockets} onSelectDocket={handleSelectDocket} />;
             case 'profile':

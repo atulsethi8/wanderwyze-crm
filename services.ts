@@ -185,6 +185,24 @@ export const supabaseService = {
     const payload = { ...customer } as any;
     const { data, error } = await supabase.from('customer_master').insert([payload]).select().single();
     return { data: (data || null) as unknown as import('./types').Customer | null, error: error ? error.message : null };
+  },
+  async updateCustomer(customerId: string, updates: Partial<import('./types').Customer>): Promise<{ data: import('./types').Customer | null; error: string | null }> {
+    const payload = { ...updates, updated_at: new Date().toISOString() } as any;
+    const { data, error } = await supabase.from('customer_master').update(payload).eq('customer_id', customerId).select().single();
+    return { data: (data || null) as unknown as import('./types').Customer | null, error: error ? error.message : null };
+  },
+  async deleteCustomer(customerId: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.from('customer_master').delete().eq('customer_id', customerId);
+    return { error: error ? error.message : null };
+  },
+  async searchCustomers(term: string): Promise<{ data: import('./types').Customer[]; error: string | null }> {
+    const like = `%${term}%`;
+    const { data, error } = await supabase
+      .from('customer_master')
+      .select('*')
+      .or(`name.ilike.${like},email.ilike.${like},phone.ilike.${like}`)
+      .order('created_at', { ascending: false });
+    return { data: (data || []) as unknown as import('./types').Customer[], error: error ? error.message : null };
   }
 };
 
