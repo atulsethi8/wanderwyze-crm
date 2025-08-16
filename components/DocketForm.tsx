@@ -1066,7 +1066,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             {!isReadOnly && (
               <div className="bg-slate-50 p-4 rounded-lg shadow-sm">
                   <h3 className="font-semibold mb-3">Actions</h3>
-                  <button onClick={() => setInvoiceModalOpen(true)} disabled={!docket?.id} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed">Generate Invoice</button>
+                  <button onClick={() => { console.log("Generate Invoice button clicked, docket:", docket?.id); setInvoiceModalOpen(true); }} disabled={!docket?.id} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed">Generate Invoice</button>
                   {formState.invoices && formState.invoices.length > 0 && (
                       <div className="mt-4 pt-4 border-t">
                           <h4 className="font-semibold text-sm mb-2 text-slate-600">Generated Invoices</h4>
@@ -1112,11 +1112,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             </div>
         </Modal>
 
-        {invoiceModalOpen && docket && (
+        {invoiceModalOpen && docket && (() => { console.log("Rendering InvoiceGenerator modal, docket:", docket.id); return true; })() && (
             <InvoiceGenerator 
                 docket={docket}
                 passengers={formState.passengers}
-                onClose={() => setInvoiceModalOpen(false)}
+                onClose={() => { console.log("InvoiceGenerator onClose called"); setInvoiceModalOpen(false); }}
                 onSaveInvoice={handleSaveInvoice}
             />
         )}

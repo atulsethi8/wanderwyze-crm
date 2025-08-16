@@ -243,58 +243,68 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const formatPercent = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '')}%`;
 
   const handleSaveAndDownload = async () => {
+    console.log("Starting invoice save process...");
+    
     if (!billedToDetails || !billedToDetails.name) {
       alert("Please select a customer or fill in the billed to details.");
       return;
     }
 
-    const nextInvoiceNum = await getNextInvoiceNumber();
-    const finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
-    
-    setInvoiceNumber(finalInvoiceNumber); // Set for immediate preview update
-    
-    const newInvoice: Invoice = {
-      id: `INV-${Date.now()}`,
-      invoiceNumber: finalInvoiceNumber,
-      date: invoiceDate,
-      billedTo: billedToDetails,
-      lineItems,
-      notes,
-      placeOfSupply,
-      subtotal: financialTotals.subtotal,
-      gstAmount: financialTotals.gstAmount,
-      grandTotal: financialTotals.grandTotal,
-      gstType,
-      companySettings: { ...settings },
-      terms,
-      dueDate,
-      customerId: selectedCustomerId || undefined,
-      docketId: docket.id
-    };
-    
-    // Save to database first
     try {
+      const nextInvoiceNum = await getNextInvoiceNumber();
+      const finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
+      
+      setInvoiceNumber(finalInvoiceNumber); // Set for immediate preview update
+      
+      const newInvoice: Invoice = {
+        id: `INV-${Date.now()}`,
+        invoiceNumber: finalInvoiceNumber,
+        date: invoiceDate,
+        billedTo: billedToDetails,
+        lineItems,
+        notes,
+        placeOfSupply,
+        subtotal: financialTotals.subtotal,
+        gstAmount: financialTotals.gstAmount,
+        grandTotal: financialTotals.grandTotal,
+        gstType,
+        companySettings: { ...settings },
+        terms,
+        dueDate,
+        customerId: selectedCustomerId || undefined,
+        docketId: docket.id
+      };
+      
+      console.log("Invoice object created:", newInvoice);
+      
+      // Save to database first
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser.user) {
         alert("User not authenticated. Please log in again.");
         return;
       }
 
-      const { error: dbError } = await supabaseService.addInvoice(newInvoice, currentUser.user.id);
+      console.log("User authenticated:", currentUser.user.id);
+
+      const { data: dbResult, error: dbError } = await supabaseService.addInvoice(newInvoice, currentUser.user.id);
       if (dbError) {
         console.error("Error saving invoice to database:", dbError);
         alert(`Failed to save invoice: ${dbError}`);
         return;
       }
 
+      console.log("Invoice saved to database successfully:", dbResult);
+
       // Call the parent callback to update local state
       onSaveInvoice(newInvoice);
 
       // Generate PDF
+      console.log("Starting PDF generation...");
       await new Promise(resolve => setTimeout(resolve, 200));
 
       const invoiceElement = document.getElementById('invoice-preview');
       if (!invoiceElement) {
+        console.error("Invoice preview element not found");
         alert('Could not find invoice element to download.');
         return;
       }
@@ -330,12 +340,14 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
         }
 
         pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+        console.log("PDF generated and downloaded successfully");
       } catch (error) {
         console.error("Error generating PDF:", error);
         alert("An error occurred while generating the PDF.");
       }
 
       // Close modal after successful save & download
+      console.log("Closing modal...");
       onClose();
     } catch (error) {
       console.error("Error in invoice save process:", error);
@@ -378,7 +390,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
           <h2 className="text-xl font-bold text-slate-800">Invoice Generator</h2>
           <div>
             <button onClick={handleSaveAndDownload} className="bg-brand-primary text-white px-4 py-2 rounded-md mr-2 text-sm font-semibold">Save & Download PDF</button>
-            <button onClick={onClose} className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md text-sm">Close</button>
+            <button onClick={() => { console.log("Close button clicked"); onClose(); }} className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md text-sm">Close</button>
           </div>
         </div>
         <div className="flex-grow flex flex-col lg:flex-row overflow-auto">
