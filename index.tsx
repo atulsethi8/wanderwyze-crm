@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import App from './App';
+import { InvoiceForm } from './components/InvoiceForm';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -10,6 +12,11 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <HashRouter>
+      <Routes>
+        <Route path="/form" element={<InvoiceForm />} />
+        <Route path="/*" element={<App />} />
+      </Routes>
+    </HashRouter>
   </React.StrictMode>
 );
