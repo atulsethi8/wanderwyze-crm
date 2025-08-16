@@ -203,6 +203,46 @@ export const supabaseService = {
       .or(`name.ilike.${like},email.ilike.${like},phone.ilike.${like}`)
       .order('created_at', { ascending: false });
     return { data: (data || []) as unknown as import('./types').Customer[], error: error ? error.message : null };
+  },
+
+  // Invoice Master
+  async addInvoice(invoice: import('./types').Invoice, userId: string): Promise<{ data: any; error: string | null }> {
+    const payload = {
+      invoice_number: invoice.invoiceNumber,
+      docket_id: invoice.docketId,
+      customer_id: invoice.customerId,
+      invoice_date: invoice.date,
+      due_date: invoice.dueDate,
+      billed_to: invoice.billedTo,
+      line_items: invoice.lineItems,
+      subtotal: invoice.subtotal,
+      gst_amount: invoice.gstAmount,
+      grand_total: invoice.grandTotal,
+      gst_type: invoice.gstType,
+      place_of_supply: invoice.placeOfSupply,
+      terms: invoice.terms,
+      notes: invoice.notes,
+      company_settings_snapshot: invoice.companySettings,
+      created_by: userId
+    };
+    const { data, error } = await supabase.from('invoice_master').insert([payload]).select().single();
+    return { data: data || null, error: error ? error.message : null };
+  },
+  async getInvoicesByDocket(docketId: string): Promise<{ data: any[]; error: string | null }> {
+    const { data, error } = await supabase
+      .from('invoice_master')
+      .select('*')
+      .eq('docket_id', docketId)
+      .order('created_at', { ascending: false });
+    return { data: (data || []) as any[], error: error ? error.message : null };
+  },
+  async getInvoiceById(invoiceId: string): Promise<{ data: any; error: string | null }> {
+    const { data, error } = await supabase
+      .from('invoice_master')
+      .select('*')
+      .eq('invoice_id', invoiceId)
+      .single();
+    return { data: data || null, error: error ? error.message : null };
   }
 };
 

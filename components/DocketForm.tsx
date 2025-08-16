@@ -142,6 +142,46 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     useEffect(() => {
         if (docket) {
             setFormState(JSON.parse(JSON.stringify(docket))); // Deep copy to avoid mutation issues
+            
+            // Load invoices from database
+            const loadInvoices = async () => {
+                try {
+                    const { data: invoices, error } = await supabaseService.getInvoicesByDocket(docket.id);
+                    if (error) {
+                        console.error("Error loading invoices:", error);
+                        return;
+                    }
+                    
+                    // Convert database format to Invoice type
+                    const convertedInvoices: Invoice[] = invoices.map((inv: any) => ({
+                        id: inv.invoice_id,
+                        invoiceNumber: inv.invoice_number,
+                        date: inv.invoice_date,
+                        billedTo: inv.billed_to,
+                        lineItems: inv.line_items,
+                        notes: inv.notes || "",
+                        placeOfSupply: inv.place_of_supply || "",
+                        subtotal: inv.subtotal,
+                        gstAmount: inv.gst_amount,
+                        grandTotal: inv.grand_total,
+                        gstType: inv.gst_type as 'IGST' | 'CGST/SGST',
+                        companySettings: inv.company_settings_snapshot,
+                        terms: inv.terms,
+                        dueDate: inv.due_date,
+                        customerId: inv.customer_id,
+                        docketId: inv.docket_id
+                    }));
+                    
+                    setFormState(prev => ({
+                        ...prev,
+                        invoices: convertedInvoices
+                    }));
+                } catch (error) {
+                    console.error("Error loading invoices:", error);
+                }
+            };
+            
+            loadInvoices();
         } else {
             setFormState(INITIAL_DOCKET_FORM_STATE);
         }
@@ -532,10 +572,45 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     };
     
     const handleSaveInvoice = (invoice: Invoice) => {
-        setFormState(p => ({
-            ...p,
-            invoices: [...(p.invoices || []), invoice]
-        }));
+        // Invoice is already saved to database, just reload the invoices list
+        const reloadInvoices = async () => {
+            try {
+                const { data: invoices, error } = await supabaseService.getInvoicesByDocket(docket!.id);
+                if (error) {
+                    console.error("Error reloading invoices:", error);
+                    return;
+                }
+                
+                // Convert database format to Invoice type
+                const convertedInvoices: Invoice[] = invoices.map((inv: any) => ({
+                    id: inv.invoice_id,
+                    invoiceNumber: inv.invoice_number,
+                    date: inv.invoice_date,
+                    billedTo: inv.billed_to,
+                    lineItems: inv.line_items,
+                    notes: inv.notes || "",
+                    placeOfSupply: inv.place_of_supply || "",
+                    subtotal: inv.subtotal,
+                    gstAmount: inv.gst_amount,
+                    grandTotal: inv.grand_total,
+                    gstType: inv.gst_type as 'IGST' | 'CGST/SGST',
+                    companySettings: inv.company_settings_snapshot,
+                    terms: inv.terms,
+                    dueDate: inv.due_date,
+                    customerId: inv.customer_id,
+                    docketId: inv.docket_id
+                }));
+                
+                setFormState(prev => ({
+                    ...prev,
+                    invoices: convertedInvoices
+                }));
+            } catch (error) {
+                console.error("Error reloading invoices:", error);
+            }
+        };
+        
+        reloadInvoices();
         setShowInvoiceSuccess(true);
         if (notificationTimer.current) clearTimeout(notificationTimer.current);
         notificationTimer.current = setTimeout(() => setShowInvoiceSuccess(false), 3000);

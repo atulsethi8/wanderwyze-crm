@@ -159,6 +159,97 @@ export interface Database {
           name?: string
         }
       }
+      customer_master: {
+        Row: {
+          address: string
+          created_at: string
+          customer_id: string
+          email: string | null
+          gst_number: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          customer_id?: string
+          email?: string | null
+          gst_number: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          customer_id?: string
+          email?: string | null
+          gst_number?: string
+          name?: string
+          phone?: string | null
+        }
+      }
+      invoice_master: {
+        Row: {
+          invoice_id: string
+          invoice_number: string
+          docket_id: string | null
+          customer_id: string | null
+          invoice_date: string
+          due_date: string
+          billed_to: Json
+          line_items: Json
+          subtotal: number
+          gst_amount: number
+          grand_total: number
+          gst_type: string
+          place_of_supply: string | null
+          terms: string
+          notes: string | null
+          company_settings_snapshot: Json
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          invoice_id?: string
+          invoice_number: string
+          docket_id?: string | null
+          customer_id?: string | null
+          invoice_date: string
+          due_date: string
+          billed_to: Json
+          line_items: Json
+          subtotal: number
+          gst_amount: number
+          grand_total: number
+          gst_type: string
+          place_of_supply?: string | null
+          terms: string
+          notes?: string | null
+          company_settings_snapshot: Json
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          invoice_id?: string
+          invoice_number?: string
+          docket_id?: string | null
+          customer_id?: string | null
+          invoice_date?: string
+          due_date?: string
+          billed_to?: Json
+          line_items?: Json
+          subtotal?: number
+          gst_amount?: number
+          grand_total?: number
+          gst_type?: string
+          place_of_supply?: string | null
+          terms?: string
+          notes?: string | null
+          company_settings_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

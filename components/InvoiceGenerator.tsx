@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings, Customer } from '../types';
 import { useCompanySettings } from '../hooks';
-import { formatCurrency, formatDate, amountToWords, supabaseService } from '../services';
+import { formatCurrency, formatDate, amountToWords, supabaseService, supabase } from '../services';
 import { Icons, FormInput, FormTextarea, FormSelect, Modal, Spinner } from './common';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -272,54 +272,75 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       docketId: docket.id
     };
     
-    onSaveInvoice(newInvoice);
-
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    const invoiceElement = document.getElementById('invoice-preview');
-    if (!invoiceElement) {
-      alert('Could not find invoice element to download.');
-      return;
-    }
-
+    // Save to database first
     try {
-      const canvas = await html2canvas(invoiceElement, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser.user) {
+        alert("User not authenticated. Please log in again.");
+        return;
+      }
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const { error: dbError } = await supabaseService.addInvoice(newInvoice, currentUser.user.id);
+      if (dbError) {
+        console.error("Error saving invoice to database:", dbError);
+        alert(`Failed to save invoice: ${dbError}`);
+        return;
+      }
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Call the parent callback to update local state
+      onSaveInvoice(newInvoice);
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
+      // Generate PDF
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const invoiceElement = document.getElementById('invoice-preview');
+      if (!invoiceElement) {
+        alert('Could not find invoice element to download.');
+        return;
+      }
+
+      try {
+        const canvas = await html2canvas(invoiceElement, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+
+        // Add page numbers
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          pdf.setFontSize(10);
+          pdf.setTextColor(120);
+          pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
+        }
+
+        pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        alert("An error occurred while generating the PDF.");
       }
 
-      // Add page numbers
-      const totalPages = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(10);
-        pdf.setTextColor(120);
-        pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
-      }
-
-      pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+      // Close modal after successful save & download
+      onClose();
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("An error occurred while generating the PDF.");
+      console.error("Error in invoice save process:", error);
+      alert("An error occurred while saving the invoice.");
     }
-
-    // Close modal after successful save & download
-    onClose();
   };
 
   const handleLineItemChange = (id: string, field: keyof InvoiceLineItem, value: string | number | boolean) => {
