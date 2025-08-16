@@ -191,37 +191,6 @@ const initializeAi = (): GoogleGenAI => {
 
 
 export const geminiService = {
-  getItinerarySuggestions: async (destination: string, duration: number, interests: string) => {
-    const aiInstance = initializeAi();
-    const prompt = `Provide itinerary suggestions for a ${duration}-day trip to ${destination} with interests in ${interests}. Return a JSON object.`;
-    const response = await aiInstance.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            hotels: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT, properties: { name: { type: Type.STRING }, checkInDays: { type: Type.INTEGER }, checkOutDays: { type: Type.INTEGER } }
-              }
-            },
-            excursions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT, properties: { name: { type: Type.STRING }, day: { type: Type.INTEGER } }
-              }
-            }
-          }
-        }
-      }
-    });
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText);
-  },
-
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
       const aiInstance = initializeAi();
       const documentPart = { inlineData: { data: fileContent, mimeType } };

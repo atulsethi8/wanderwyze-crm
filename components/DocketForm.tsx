@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Docket, Client, Itinerary, Passenger, Flight, Hotel, Excursion, Transfer, Payment, UploadedFile, Comment, BookingStatus, Tag, PaymentType, Supplier, PassengerType, Gender, LeadSource, FlightPassengerDetail, Invoice, Agent } from '../types';
 import { INITIAL_DOCKET_FORM_STATE, LEAD_SOURCES } from '../constants';
-import { formatCurrency, formatDate, getNumberOfNights, toBase64, geminiService, amountToWords, formatDateTimeIST } from '../services';
+import { formatCurrency, formatDate, getNumberOfNights, toBase64, amountToWords, formatDateTimeIST } from '../services';
 import { useAuth } from '../hooks';
 import { Icons, Modal, Spinner, FormInput, FormTextarea, FormSelect } from './common';
 import { InvoiceGenerator } from './InvoiceGenerator';
@@ -77,27 +77,6 @@ const NewCommentForm: React.FC<{onAddComment: (text: string) => void}> = ({onAdd
     )
 }
 
-const AISuggestionForm: React.FC<{onSubmit: (dest: string, dur: number, int: string) => void, loading: boolean}> = ({onSubmit, loading}) => {
-    const [destination, setDestination] = useState('');
-    const [duration, setDuration] = useState(7);
-    const [interests, setInterests] = useState('');
-    
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSubmit(destination, duration, interests);
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput label="Destination" value={destination} onChange={e => setDestination(e.target.value)} placeholder="e.g., Paris, France" required/>
-            <FormInput label="Duration (days)" type="number" value={duration} onChange={e => setDuration(+e.target.value)} required/>
-            <FormInput label="Interests" value={interests} onChange={e => setInterests(e.target.value)} placeholder="e.g., museums, food, history" required/>
-            <button type="submit" disabled={loading} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 flex justify-center items-center">
-                {loading ? <Spinner size="sm" /> : "Get Suggestions"}
-            </button>
-        </form>
-    );
-};
 
 // --- MODAL CONTENT FOR ADDING PAX TO FLIGHT ---
 const AddPaxToFlightModalContent: React.FC<{
@@ -144,7 +123,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleteReason, setDeleteReason] = useState('');
     const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
-    const [aiModalOpen, setAiModalOpen] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [supplierModalOpen, setSupplierModalOpen] = useState(false);
     const [newSupplier, setNewSupplier] = useState<Omit<Supplier, 'id'>>({ name: '', contactPerson: '', contactNumber: '' });
@@ -543,33 +521,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         }
     };
 
-    const handleAiSuggestions = async (destination: string, duration: number, interests: string) => {
-        setAiLoading(true);
-        try {
-            const suggestions = await geminiService.getItinerarySuggestions(destination, duration, interests);
-            if (suggestions.hotels) {
-                const newHotels = suggestions.hotels.map((h: any) => {
-                    const checkIn = new Date(); checkIn.setDate(checkIn.getDate() + h.checkInDays);
-                    const checkOut = new Date(); checkOut.setDate(checkOut.getDate() + h.checkOutDays);
-                    return { id: `HO-${Date.now()}`, name: h.name, checkIn: checkIn.toISOString().split('T')[0], checkOut: checkOut.toISOString().split('T')[0], numberOfRooms: 1, netCost: 0, grossBilled: 0, supplier: null, paxRefs: [] };
-                });
-                setFormState(p => ({...p, itinerary: {...p.itinerary, hotels: [...p.itinerary.hotels, ...newHotels]}}));
-            }
-            if (suggestions.excursions) {
-                const newExcursions = suggestions.excursions.map((a: any) => {
-                    const date = new Date(); date.setDate(date.getDate() + a.day);
-                    return { id: `EX-${Date.now()}`, name: a.name, date: date.toISOString().split('T')[0], netCost: 0, grossBilled: 0, supplier: null };
-                });
-                 setFormState(p => ({...p, itinerary: {...p.itinerary, excursions: [...p.itinerary.excursions, ...newExcursions]}}));
-            }
-            setAiModalOpen(false);
-        } catch(error) {
-            alert("Failed to get AI suggestions.");
-            console.error(error);
-        } finally {
-            setAiLoading(false);
-        }
-    };
 
     const handleSaveSupplier = () => {
         if(newSupplier.name) {
@@ -825,7 +776,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
                 {activeTab === 'details' && (<Section title="Client Details" icon={Icons.user}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormInput label="Client Name" value={formState.client.name} onChange={e => handleClientChange('name', e.target.value)} disabled={isReadOnly} /><FormInput label="Contact Info (Email/Phone)" value={formState.client.contactInfo} onChange={e => handleClientChange('contactInfo', e.target.value)} disabled={isReadOnly}/><FormSelect label="Lead Source" value={formState.client.leadSource} onChange={e => handleClientChange('leadSource', e.target.value as LeadSource)} disabled={isReadOnly}>{LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}</FormSelect><FormSelect label="Assigned Agent" value={formState.agentId || ''} onChange={e => setFormState(p => ({...p, agentId: e.target.value || null}))} disabled={isReadOnly}><option value="">-- Unassigned --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</FormSelect></div></Section>)}
 
                 {activeTab === 'itinerary' && (<>
-                    <button onClick={() => setAiModalOpen(true)} disabled={isReadOnly} className="flex items-center gap-2 bg-teal-500 text-white px-4 py-2 rounded-md font-semibold hover:bg-teal-600 mb-4 disabled:bg-slate-400">{Icons.ai} AI Itinerary Suggestions</button>
                     <div className={`${formState.status === BookingStatus.Confirmed ? 'confirmed-mode' : 'editable-mode'}`}>
                      <Section title="Passengers" icon={Icons.user} bgClass="bg-white">
                          <div className="flex items-center gap-4 mb-4">
@@ -1065,8 +1015,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
 
         <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Confirm Deletion"><p className="mb-4">Are you sure you want to delete this docket? This action cannot be undone. Please provide a reason for deletion.</p><FormTextarea label="Reason" value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Reason for deletion..." className="mb-4"></FormTextarea><div className="flex justify-end gap-3"><button onClick={() => setDeleteModalOpen(false)} className="px-4 py-2 bg-slate-200 rounded-md">Cancel</button><button onClick={handleDeleteClick} disabled={!deleteReason} className="px-4 py-2 bg-red-600 text-white rounded-md disabled:bg-red-300">Delete</button></div></Modal>
         
-        <Modal isOpen={aiModalOpen} onClose={() => setAiModalOpen(false)} title="AI Itinerary Suggestions"><AISuggestionForm onSubmit={handleAiSuggestions} loading={aiLoading} /></Modal>
-
         <Modal isOpen={supplierModalOpen} onClose={() => setSupplierModalOpen(false)} title="Add New Supplier">
             <div className="space-y-4">
                 <FormInput label="Supplier Name" value={newSupplier.name} onChange={e => setNewSupplier(p => ({...p, name: e.target.value}))} />
