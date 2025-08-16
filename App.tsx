@@ -78,8 +78,22 @@ const AppContent: React.FC = () => {
 
     React.useEffect(() => {
         const handleHashChange = () => {
-            const path = window.location.hash.replace(/^#\/?/, '').split('?')[0];
-            setCurrentView(path || 'dashboard');
+            const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+            // Recognize dynamic routes
+            if (raw === 'docket/new') {
+                setSelectedDocketId(null);
+                setCurrentView('form');
+                return;
+            }
+            const docketDetailsMatch = raw.match(/^dockets\/([^/]+)\/details$/);
+            if (docketDetailsMatch) {
+                const id = docketDetailsMatch[1];
+                setSelectedDocketId(id);
+                setCurrentView('form');
+                return;
+            }
+            // Fallback to simple view name
+            setCurrentView(raw || 'dashboard');
         };
 
         window.addEventListener('hashchange', handleHashChange);
@@ -97,12 +111,12 @@ const AppContent: React.FC = () => {
     
     const handleNewDocket = () => {
         setSelectedDocketId(null);
-        navigate('/form');
+        navigate('/docket/new');
     };
 
     const handleSelectDocket = (id: string) => {
         setSelectedDocketId(id);
-        navigate('/form');
+        navigate(`/dockets/${id}/details`);
     };
 
     const handleSaveDocket = async (docketData: any, id?: string) => {
@@ -110,8 +124,7 @@ const AppContent: React.FC = () => {
             const savedId = await saveDocket(docketData, id);
             if(savedId) {
                 setSelectedDocketId(savedId);
-                // If we just created a new docket, we stay on the form page to continue editing.
-                // The URL is already correct from handleNewDocket.
+                navigate(`/dockets/${savedId}/details`);
             }
         } catch (error: any) {
             console.error("Error saving docket from App.tsx:", error);
@@ -169,7 +182,7 @@ const AppContent: React.FC = () => {
                     loading={docketsLoading}
                 />;
             case 'reports':
-                return <ReportsDashboard dockets={dockets} agents={agents} onOpenDocket={(id) => { setSelectedDocketId(id); navigate('/form'); }} />;
+                return <ReportsDashboard dockets={dockets} agents={agents} onOpenDocket={(id) => { setSelectedDocketId(id); navigate(`/dockets/${id}/details`); }} />;
             case 'settings':
                 return currentUser.role === 'admin' ? <CompanySettingsPage /> : <p>Access Denied</p>;
             case 'change_password':

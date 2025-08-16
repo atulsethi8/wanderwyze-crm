@@ -191,6 +191,7 @@ export interface Invoice {
   terms: string;
   dueDate: string;
   customerId?: string; // optional link to Customer Master while preserving snapshot
+  docketId?: string; // link to docket
 }
 
 

@@ -236,7 +236,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       companySettings: { ...settings },
       terms,
       dueDate,
-      customerId: selectedCustomerId || undefined
+      customerId: selectedCustomerId || undefined,
+      docketId: docket.id
     };
     
     onSaveInvoice(newInvoice);
@@ -284,6 +285,9 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       console.error("Error generating PDF:", error);
       alert("An error occurred while generating the PDF.");
     }
+
+    // Close modal after successful save & download
+    onClose();
   };
 
   const handleLineItemChange = (id: string, field: keyof InvoiceLineItem, value: string | number | boolean) => {
