@@ -131,6 +131,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
     const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
     const notificationTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [showInvoiceSuccess, setShowInvoiceSuccess] = useState(false);
     
     const computedReadOnly = useMemo(() => {
         if (!docket || !currentUser) return false; // New dockets are always editable
@@ -535,6 +536,9 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             ...p,
             invoices: [...(p.invoices || []), invoice]
         }));
+        setShowInvoiceSuccess(true);
+        if (notificationTimer.current) clearTimeout(notificationTimer.current);
+        notificationTimer.current = setTimeout(() => setShowInvoiceSuccess(false), 3000);
     };
 
     const handleSaveClick = async () => {
@@ -748,6 +752,12 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             <div className="fixed top-24 right-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300" role="alert">
                 <strong className="font-bold">Success!</strong>
                 <span className="block sm:inline ml-2">Docket saved successfully.</span>
+            </div>
+        )}
+        {showInvoiceSuccess && (
+            <div className="fixed top-40 right-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300" role="alert">
+                <strong className="font-bold">Success!</strong>
+                <span className="block sm:inline ml-2">Invoice generated successfully.</span>
             </div>
         )}
         <div className="flex flex-col lg:flex-row h-full bg-slate-100">
