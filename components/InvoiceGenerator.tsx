@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings } from '../types';
+import { Customer, CustomerFormData } from '../types/customer';
+import { customerService } from '../services/customerService';
 import { useCompanySettings } from '../hooks';
 import { formatCurrency, formatDate, amountToWords } from '../services';
 import { Icons, FormInput, FormTextarea, FormSelect } from './common';
@@ -51,6 +53,27 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const [gstType, setGstType] = useState<'IGST' | 'CGST/SGST'>('IGST');
   const [terms, setTerms] = useState('Due on Receipt');
   const [dueDate, setDueDate] = useState('');
+  const [currentInvoiceId, setCurrentInvoiceId] = useState<string | null>(null);
+
+  // Customer search and selection state
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomerData, setNewCustomerData] = useState<CustomerFormData>({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    gstin: ''
+  });
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  
+  // Enhanced functionality state
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [auditLog, setAuditLog] = useState<string[]>([]);
+  const [originalBilledToDetails, setOriginalBilledToDetails] = useState<BilledTo | null>(null);
 
   // Auto-set GST type based on Place of Supply vs Company State
   useEffect(() => {
@@ -70,6 +93,15 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     date.setDate(date.getDate() + daysToAdd);
     setDueDate(date.toISOString().split('T')[0]);
   }, [invoiceDate, terms]);
+
+  // Search customers when query changes
+  useEffect(() => {
+    if (customerSearchQuery.trim()) {
+      searchCustomers();
+    } else {
+      setCustomerSearchResults([]);
+    }
+  }, [customerSearchQuery]);
 
   // Initialize line items from docket
   useEffect(() => {
@@ -128,12 +160,120 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       }
   }, [billedToPassengerId, passengers]);
 
+  // Customer search functionality
+  const searchCustomers = async () => {
+    setCustomerSearchLoading(true);
+    try {
+      const response = await customerService.searchCustomers(customerSearchQuery);
+      if (!response.error) {
+        setCustomerSearchResults(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error searching customers:', error);
+    }
+    setCustomerSearchLoading(false);
+  };
+
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setBilledToDetails({
+      name: customer.name,
+      email: customer.email || '',
+      phone: customer.phone || '',
+      address: customer.address || '',
+      gstin: ''
+    });
+    setCustomerSearchQuery(customer.name);
+    setCustomerSearchResults([]);
+    setShowNewCustomerForm(false);
+    
+    // Clear passenger selection when customer is selected
+    setBilledToPassengerId('');
+    
+    // Set place of supply if address contains state
+    if (customer.address) {
+      const addressParts = customer.address.split(',');
+      const stateGuess = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : '';
+      if (INDIAN_STATES.map(s => s.toLowerCase()).includes(stateGuess.toLowerCase())) {
+        setPlaceOfSupply(INDIAN_STATES.find(s => s.toLowerCase() === stateGuess.toLowerCase()) || '');
+      }
+    }
+  };
+
+  const handleNewCustomerInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewCustomerData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCreateNewCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newCustomerData.name.trim()) {
+      alert('Customer name is required');
+      return;
+    }
+
+    setCustomerSearchLoading(true);
+
+    try {
+      const response = await customerService.createCustomer(newCustomerData);
+      
+      if (response.error) {
+        alert(response.error);
+      } else {
+        const newCustomer = response.data;
+        if (newCustomer) {
+          // Set the selected customer and billed to details
+          setSelectedCustomer(newCustomer);
+          setBilledToDetails({
+            name: newCustomer.name,
+            email: newCustomer.email || '',
+            phone: newCustomer.phone || '',
+            address: newCustomer.address || '',
+            gstin: newCustomer.gstin || ''
+          });
+          
+          // Reset the form
+          setNewCustomerData({
+            name: '',
+            email: '',
+            phone: '',
+            address: '',
+            gstin: ''
+          });
+          setShowNewCustomerForm(false);
+          
+          // Add to audit log
+          const timestamp = new Date().toLocaleString();
+          setAuditLog(prev => [...prev, `${timestamp}: New customer "${newCustomer.name}" created and selected`]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to create customer:', err);
+      alert('Failed to create customer');
+    }
+    
+    setCustomerSearchLoading(false);
+  };
+
   const handleBilledToChange = (field: keyof BilledTo, value: string) => {
     setBilledToDetails(prev => {
         const newDetails: BilledTo = prev ? { ...prev } : { name: '', address: '', email: '', phone: '', gstin: '' };
         (newDetails as any)[field] = value;
         return newDetails;
     });
+    
+    // Add to audit log if editing
+    if (isEditing && originalBilledToDetails) {
+      const oldValue = originalBilledToDetails[field] || '';
+      if (oldValue !== value) {
+        const timestamp = new Date().toLocaleString();
+        setAuditLog(prev => [...prev, `${timestamp}: Updated ${field} from "${oldValue}" to "${value}"`]);
+      }
+    }
   };
   
   const financialTotals = useMemo(() => {
@@ -177,19 +317,232 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
   const formatPercent = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '')}%`;
 
-  const handleSaveAndDownload = async () => {
+  const loadInvoice = (invoice: Invoice) => {
+    setInvoiceNumber(invoice.invoiceNumber);
+    setInvoiceDate(invoice.date);
+    setBilledToDetails(invoice.billedTo);
+    setPlaceOfSupply(invoice.placeOfSupply);
+    setLineItems(invoice.lineItems);
+    setNotes(invoice.notes);
+    setGstType(invoice.gstType);
+    setTerms(invoice.terms);
+    setDueDate(invoice.dueDate);
+    setCurrentInvoiceId(invoice.id);
+    setIsReadOnly(true);
+    setOriginalBilledToDetails(invoice.billedTo);
+    
+    // Try to find and set the selected customer if it exists in the database
+    if (invoice.billedTo && invoice.billedTo.name) {
+      // Search for the customer in the database
+      customerService.searchCustomers(invoice.billedTo.name).then(result => {
+        if (result.data && result.data.length > 0) {
+          // Find the best match - prioritize exact name match, then email, then phone
+          const bestMatch = result.data.find(customer => 
+            customer.name.toLowerCase() === invoice.billedTo!.name.toLowerCase()
+          ) || result.data.find(customer => 
+            customer.email && customer.email === invoice.billedTo!.email
+          ) || result.data.find(customer => 
+            customer.phone && customer.phone === invoice.billedTo!.phone
+          ) || result.data[0]; // Fallback to first result
+          
+          if (bestMatch) {
+            setSelectedCustomer(bestMatch);
+            // Also update the billed to details to match the database record
+            setBilledToDetails({
+              name: bestMatch.name,
+              email: bestMatch.email || invoice.billedTo.email,
+              phone: bestMatch.phone || invoice.billedTo.phone,
+              address: bestMatch.address || invoice.billedTo.address,
+              gstin: bestMatch.gstin || invoice.billedTo.gstin
+            });
+          }
+        }
+      }).catch(error => {
+        console.error('Error searching for customer:', error);
+      });
+    }
+    
+    const timestamp = new Date().toLocaleString();
+    setAuditLog(prev => [...prev, `${timestamp}: Loaded existing invoice ${invoice.invoiceNumber}`]);
+  };
+
+  const handleSaveInvoice = async () => {
     if (!billedToDetails || !billedToDetails.name) {
-      alert("Please select and confirm a passenger to bill to.");
+      alert("Please select and confirm a customer or passenger to bill to.");
       return;
     }
 
-    const nextInvoiceNum = await getNextInvoiceNumber();
-    const finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
-    
-    setInvoiceNumber(finalInvoiceNumber); // Set for immediate preview update
+    // If a passenger is selected as billed to, convert them to a customer in the database
+    if (billedToPassengerId && !selectedCustomer) {
+      const selectedPassenger = passengers.find(p => p.id === billedToPassengerId);
+      if (selectedPassenger) {
+        try {
+          // Check if passenger already exists as a customer
+          const searchResult = await customerService.searchCustomers(selectedPassenger.fullName);
+          let existingCustomer = null;
+          
+          if (searchResult.data && searchResult.data.length > 0) {
+            existingCustomer = searchResult.data.find(customer => 
+              customer.name.toLowerCase() === selectedPassenger.fullName.toLowerCase()
+            );
+          }
+          
+          if (!existingCustomer) {
+            // Create new customer from passenger data
+            const newCustomerData: CustomerFormData = {
+              name: selectedPassenger.fullName,
+              email: selectedPassenger.email || '',
+              phone: selectedPassenger.phone || '',
+              address: selectedPassenger.address || '',
+              gstin: selectedPassenger.gstin || ''
+            };
+            
+            const createResult = await customerService.createCustomer(newCustomerData);
+            if (createResult.data) {
+              setSelectedCustomer(createResult.data);
+              const timestamp = new Date().toLocaleString();
+              setAuditLog(prev => [...prev, `${timestamp}: Passenger "${selectedPassenger.fullName}" converted to customer in database`]);
+            }
+          } else {
+            setSelectedCustomer(existingCustomer);
+          }
+        } catch (error) {
+          console.error('Failed to convert passenger to customer:', error);
+        }
+      }
+    }
+
+    // Update customer database if customer details were modified
+    if (billedToDetails && billedToDetails.name) {
+      try {
+        // If we have a selected customer, update it
+        if (selectedCustomer) {
+          const updateData: Partial<CustomerFormData> = {};
+          let hasChanges = false;
+
+          if (selectedCustomer.name !== billedToDetails.name) {
+            updateData.name = billedToDetails.name;
+            hasChanges = true;
+          }
+          if (selectedCustomer.email !== billedToDetails.email) {
+            updateData.email = billedToDetails.email;
+            hasChanges = true;
+          }
+          if (selectedCustomer.phone !== billedToDetails.phone) {
+            updateData.phone = billedToDetails.phone;
+            hasChanges = true;
+          }
+          if (selectedCustomer.address !== billedToDetails.address) {
+            updateData.address = billedToDetails.address;
+            hasChanges = true;
+          }
+          if (selectedCustomer.gstin !== billedToDetails.gstin) {
+            updateData.gstin = billedToDetails.gstin;
+            hasChanges = true;
+          }
+
+          if (hasChanges) {
+            await customerService.updateCustomer(selectedCustomer.id, updateData);
+            const timestamp = new Date().toLocaleString();
+            setAuditLog(prev => [...prev, `${timestamp}: Customer details updated in database`]);
+          }
+        } else {
+          // If no selected customer, try to find one by name and update it
+          const searchResult = await customerService.searchCustomers(billedToDetails.name);
+          if (searchResult.data && searchResult.data.length > 0) {
+            const existingCustomer = searchResult.data.find(customer => 
+              customer.name.toLowerCase() === billedToDetails.name.toLowerCase()
+            );
+            
+            if (existingCustomer) {
+              const updateData: Partial<CustomerFormData> = {};
+              let hasChanges = false;
+
+              if (existingCustomer.email !== billedToDetails.email) {
+                updateData.email = billedToDetails.email;
+                hasChanges = true;
+              }
+              if (existingCustomer.phone !== billedToDetails.phone) {
+                updateData.phone = billedToDetails.phone;
+                hasChanges = true;
+              }
+              if (existingCustomer.address !== billedToDetails.address) {
+                updateData.address = billedToDetails.address;
+                hasChanges = true;
+              }
+              if (existingCustomer.gstin !== billedToDetails.gstin) {
+                updateData.gstin = billedToDetails.gstin;
+                hasChanges = true;
+              }
+
+              if (hasChanges) {
+                await customerService.updateCustomer(existingCustomer.id, updateData);
+                const timestamp = new Date().toLocaleString();
+                setAuditLog(prev => [...prev, `${timestamp}: Customer details updated in database`]);
+              }
+            } else {
+              // Customer not found, create a new one
+              try {
+                const newCustomerData: CustomerFormData = {
+                  name: billedToDetails.name,
+                  email: billedToDetails.email || '',
+                  phone: billedToDetails.phone || '',
+                  address: billedToDetails.address || '',
+                  gstin: billedToDetails.gstin || ''
+                };
+                
+                const createResult = await customerService.createCustomer(newCustomerData);
+                if (createResult.data) {
+                  setSelectedCustomer(createResult.data);
+                  const timestamp = new Date().toLocaleString();
+                  setAuditLog(prev => [...prev, `${timestamp}: New customer "${billedToDetails.name}" created in database`]);
+                } else {
+                  console.error('Failed to create customer:', createResult.error);
+                }
+              } catch (error) {
+                console.error('Failed to create customer:', error);
+              }
+            }
+          } else {
+            // No search results, create a new customer
+            try {
+              const newCustomerData: CustomerFormData = {
+                name: billedToDetails.name,
+                email: billedToDetails.email || '',
+                phone: billedToDetails.phone || '',
+                address: billedToDetails.address || '',
+                gstin: billedToDetails.gstin || ''
+              };
+              
+              const createResult = await customerService.createCustomer(newCustomerData);
+              if (createResult.data) {
+                setSelectedCustomer(createResult.data);
+                const timestamp = new Date().toLocaleString();
+                setAuditLog(prev => [...prev, `${timestamp}: New customer "${billedToDetails.name}" created in database`]);
+              } else {
+                console.error('Failed to create customer:', createResult.error);
+              }
+            } catch (error) {
+              console.error('Failed to create customer:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update customer:', error);
+      }
+    }
+
+    // Only generate new invoice number if this is the first save (not editing existing)
+    let finalInvoiceNumber = invoiceNumber;
+    if (!currentInvoiceId && !isReadOnly) {
+      // This is the first save, generate new invoice number
+      const nextInvoiceNum = await getNextInvoiceNumber();
+      finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
+      setInvoiceNumber(finalInvoiceNumber);
+    }
     
     const newInvoice: Invoice = {
-      id: `INV-${Date.now()}`,
+      id: currentInvoiceId || `INV-${Date.now()}`,
       invoiceNumber: finalInvoiceNumber,
       date: invoiceDate,
       billedTo: billedToDetails,
@@ -207,6 +560,19 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     
     onSaveInvoice(newInvoice);
 
+    // Make form read-only after saving
+    setIsReadOnly(true);
+    setOriginalBilledToDetails(billedToDetails);
+    if (!currentInvoiceId) {
+      setCurrentInvoiceId(newInvoice.id);
+    }
+    const timestamp = new Date().toLocaleString();
+    setAuditLog(prev => [...prev, `${timestamp}: Invoice saved successfully`]);
+
+    alert('Invoice saved successfully!');
+  };
+
+  const handleDownloadPDF = async () => {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     const invoiceElement = document.getElementById('invoice-preview');
@@ -237,7 +603,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       }
 
       // Add page numbers
-      const totalPages = pdf.internal.getNumberOfPages();
+      const totalPages = pdf.internal.pages.length;
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
         pdf.setFontSize(10);
@@ -245,7 +611,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
         pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - 30, pageHeight - 10);
       }
 
-      pdf.save(`Invoice-${finalInvoiceNumber}.pdf`);
+      pdf.save(`Invoice-${invoiceNumber}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("An error occurred while generating the PDF.");
@@ -255,6 +621,60 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
   const handleLineItemChange = (id: string, field: keyof InvoiceLineItem, value: string | number | boolean) => {
       setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const handleEditMode = () => {
+    setIsEditing(true);
+    setIsReadOnly(false);
+    setOriginalBilledToDetails(billedToDetails);
+    const timestamp = new Date().toLocaleString();
+    setAuditLog(prev => [...prev, `${timestamp}: Edit mode enabled`]);
+  };
+
+  const handleSaveChanges = async () => {
+    if (selectedCustomer && billedToDetails) {
+      try {
+        const updateData: Partial<CustomerFormData> = {};
+        let hasChanges = false;
+
+        if (originalBilledToDetails) {
+          if (originalBilledToDetails.name !== billedToDetails.name) {
+            updateData.name = billedToDetails.name;
+            hasChanges = true;
+          }
+          if (originalBilledToDetails.email !== billedToDetails.email) {
+            updateData.email = billedToDetails.email;
+            hasChanges = true;
+          }
+          if (originalBilledToDetails.phone !== billedToDetails.phone) {
+            updateData.phone = billedToDetails.phone;
+            hasChanges = true;
+          }
+          if (originalBilledToDetails.address !== billedToDetails.address) {
+            updateData.address = billedToDetails.address;
+            hasChanges = true;
+          }
+          if (originalBilledToDetails.gstin !== billedToDetails.gstin) {
+            updateData.gstin = billedToDetails.gstin;
+            hasChanges = true;
+          }
+        }
+
+        if (hasChanges) {
+          await customerService.updateCustomer(selectedCustomer.id, updateData);
+          const timestamp = new Date().toLocaleString();
+          setAuditLog(prev => [...prev, `${timestamp}: Changes saved to customer database`]);
+        }
+      } catch (error) {
+        console.error('Failed to update customer:', error);
+      }
+    }
+
+    setIsEditing(false);
+    setIsReadOnly(true);
+    setOriginalBilledToDetails(billedToDetails);
+    const timestamp = new Date().toLocaleString();
+    setAuditLog(prev => [...prev, `${timestamp}: Edit mode disabled`]);
   };
   const addLineItem = () => {
       setLineItems(prev => [...prev, { id: `line-${Date.now()}`, description: '', quantity: 1, rate: 0, isGstApplicable: false, gstRate: 0 }]);
@@ -273,8 +693,26 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       <div className="bg-slate-50 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
         <div className="p-4 bg-white border-b flex justify-between items-center print:hidden flex-wrap gap-2">
           <h2 className="text-xl font-bold text-slate-800">Invoice Generator</h2>
-          <div>
-            <button onClick={handleSaveAndDownload} className="bg-brand-primary text-white px-4 py-2 rounded-md mr-2 text-sm font-semibold">Save & Download PDF</button>
+          <div className="flex gap-2">
+            {isReadOnly && !isEditing && (
+              <button onClick={handleEditMode} className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-semibold">
+                Edit Invoice
+              </button>
+            )}
+            {isEditing && (
+              <button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">
+                Save Changes
+              </button>
+            )}
+            {!isReadOnly && (
+              <div className="flex gap-2">
+                <button onClick={handleSaveInvoice} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">Save Invoice</button>
+                <button onClick={handleDownloadPDF} className="bg-brand-primary text-white px-4 py-2 rounded-md text-sm font-semibold">Download PDF</button>
+              </div>
+            )}
+            {isReadOnly && !isEditing && (
+              <button onClick={handleDownloadPDF} className="bg-brand-primary text-white px-4 py-2 rounded-md text-sm font-semibold">Download PDF</button>
+            )}
             <button onClick={onClose} className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md text-sm">Close</button>
           </div>
         </div>
@@ -285,6 +723,180 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {/* Customer Column */}
                         <div className="space-y-4">
+                            {/* Customer Search */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Search Customer
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Search by customer name or code..."
+                                        value={customerSearchQuery}
+                                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    
+                                    {/* Search Results Dropdown */}
+                                    {customerSearchResults.length > 0 && (
+                                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                                            {customerSearchResults.map((customer) => (
+                                                <button
+                                                    key={customer.id}
+                                                    type="button"
+                                                    onClick={() => handleCustomerSelect(customer)}
+                                                    className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b border-gray-200 last:border-b-0"
+                                                >
+                                                    <div className="font-medium">{customer.name}</div>
+                                                    <div className="text-sm text-gray-500">
+                                                        {customer.customer_code} • {customer.email || 'No email'}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Create New Customer Button */}
+                                {customerSearchQuery.trim() && customerSearchResults.length === 0 && !selectedCustomer && (
+                                    <div className="mt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setNewCustomerData(prev => ({ ...prev, name: customerSearchQuery }));
+                                                setShowNewCustomerForm(true);
+                                            }}
+                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                        >
+                                            + Create new customer "{customerSearchQuery}"
+                                        </button>
+                                    </div>
+                                )}
+                                
+                                {/* Selected Customer Display */}
+                                {selectedCustomer && (
+                                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                        <div className="font-medium text-blue-900">{selectedCustomer.name}</div>
+                                        <div className="text-sm text-blue-700">
+                                            {selectedCustomer.customer_code} • {selectedCustomer.email || 'No email'}
+                                        </div>
+                                        {selectedCustomer.phone && (
+                                            <div className="text-sm text-blue-700">Phone: {selectedCustomer.phone}</div>
+                                        )}
+                                        {selectedCustomer.address && (
+                                            <div className="text-sm text-blue-700 mt-1">Address: {selectedCustomer.address}</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* New Customer Form */}
+                            {showNewCustomerForm && (
+                                <div className="bg-gray-50 p-4 rounded-lg border">
+                                    <h3 className="font-medium text-gray-900 mb-3">Create New Customer</h3>
+                                    <form onSubmit={handleCreateNewCustomer} className="space-y-3">
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Name *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="name"
+                                                    value={newCustomerData.name}
+                                                    onChange={handleNewCustomerInputChange}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Email
+                                                </label>
+                                                <input
+                                                    type="email"
+                                                    name="email"
+                                                    value={newCustomerData.email}
+                                                    onChange={handleNewCustomerInputChange}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Phone
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    name="phone"
+                                                    value={newCustomerData.phone}
+                                                    onChange={handleNewCustomerInputChange}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Address
+                                                </label>
+                                                <textarea
+                                                    name="address"
+                                                    value={newCustomerData.address}
+                                                    onChange={handleNewCustomerInputChange}
+                                                    rows={2}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    GSTIN
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="gstin"
+                                                    value={newCustomerData.gstin}
+                                                    onChange={handleNewCustomerInputChange}
+                                                    placeholder="22AAAAA0000A1Z5"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="submit"
+                                                disabled={customerSearchLoading}
+                                                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-3 py-1 rounded text-sm"
+                                            >
+                                                {customerSearchLoading ? 'Creating...' : 'Create Customer'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowNewCustomerForm(false);
+                                                    setNewCustomerData({
+                                                        name: '',
+                                                        email: '',
+                                                        phone: '',
+                                                        address: ''
+                                                    });
+                                                }}
+                                                className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-3 py-1 rounded text-sm"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
+                            {/* OR Divider */}
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-gray-300" />
+                                </div>
+                                <div className="relative flex justify-center text-sm">
+                                    <span className="px-2 bg-white text-gray-500">OR</span>
+                                </div>
+                            </div>
+
                              <FormSelect label="Quick-fill from Passenger" value={billedToPassengerId} onChange={e => setBilledToPassengerId(e.target.value)}>
                                 <option value="">-- Select Passenger to Autofill --</option>
                                 {passengers.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
@@ -294,93 +906,244 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                 value={billedToDetails?.name || ''} 
                                 onChange={e => handleBilledToChange('name', e.target.value)}
                                 placeholder="Enter customer's full name"
+                                disabled={isReadOnly && !isEditing}
                             />
                             <FormTextarea
                                 label="Customer Address*"
                                 value={billedToDetails?.address || ''}
                                 onChange={e => handleBilledToChange('address', e.target.value)}
-                                placeholder="Enter customer's billing address"
+                                placeholder="Enter complete billing address"
                                 rows={3}
+                                disabled={isReadOnly && !isEditing}
                             />
-                            <FormInput label="Email" value={billedToDetails?.email || ''} onChange={e => handleBilledToChange('email', e.target.value)} />
-                            <FormInput label="Phone" value={billedToDetails?.phone || ''} onChange={e => handleBilledToChange('phone', e.target.value)} />
+                            <FormInput 
+                                label="Email" 
+                                type="email"
+                                value={billedToDetails?.email || ''} 
+                                onChange={e => handleBilledToChange('email', e.target.value)}
+                                placeholder="customer@example.com"
+                                disabled={isReadOnly && !isEditing}
+                            />
+                            <FormInput 
+                                label="Phone" 
+                                type="tel"
+                                value={billedToDetails?.phone || ''} 
+                                onChange={e => handleBilledToChange('phone', e.target.value)}
+                                placeholder="+91 98765 43210"
+                                disabled={isReadOnly && !isEditing}
+                            />
+                            <FormInput 
+                                label="GSTIN (Optional)" 
+                                value={billedToDetails?.gstin || ''} 
+                                onChange={e => handleBilledToChange('gstin', e.target.value)}
+                                placeholder="22AAAAA0000A1Z5"
+                                disabled={isReadOnly && !isEditing}
+                            />
                         </div>
+                        
                         {/* Invoice Details Column */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormInput label="Invoice#*" type="text" readOnly value={invoiceNumber} containerClassName="col-span-2"/>
-                            <FormInput label="Invoice Date*" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} icon={Icons.calendar} />
-                            <FormSelect label="Terms" value={terms} onChange={e => setTerms(e.target.value)}>{Object.keys(PAYMENT_TERMS).map(t => <option key={t}>{t}</option>)}</FormSelect>
-                            <FormInput label="Due Date" type="date" value={dueDate} readOnly />
-                             <FormSelect 
-                                label="Place of Supply" 
-                                containerClassName="col-span-2" 
-                                value={placeOfSupply} 
-                                onChange={e => setPlaceOfSupply(e.target.value)}
-                            >
+                        <div className="space-y-4">
+                            <FormInput 
+                                label="Invoice#" 
+                                value={invoiceNumber} 
+                                onChange={e => setInvoiceNumber(e.target.value)}
+                                placeholder="Auto-generated"
+                            />
+                            <FormInput 
+                                label="Invoice Date*" 
+                                type="date"
+                                value={invoiceDate} 
+                                onChange={e => setInvoiceDate(e.target.value)}
+                            />
+                            <FormSelect label="Terms" value={terms} onChange={e => setTerms(e.target.value)}>
+                                {Object.keys(PAYMENT_TERMS).map(term => <option key={term} value={term}>{term}</option>)}
+                            </FormSelect>
+                            <FormInput 
+                                label="Due Date" 
+                                type="date"
+                                value={dueDate} 
+                                onChange={e => setDueDate(e.target.value)}
+                                placeholder="Auto-calculated"
+                            />
+                            <FormSelect label="Place of Supply" value={placeOfSupply} onChange={e => setPlaceOfSupply(e.target.value)}>
                                 <option value="">-- Select State/UT --</option>
                                 {INDIAN_STATES.map(state => <option key={state} value={state}>{state}</option>)}
                             </FormSelect>
-                             <FormSelect label="GST Type (Override)" containerClassName="col-span-2" value={gstType} onChange={e => setGstType(e.target.value as 'IGST' | 'CGST/SGST')}>
+                            <FormSelect label="GST Type (Override)" value={gstType} onChange={e => setGstType(e.target.value as 'IGST' | 'CGST/SGST')}>
                                 <option value="IGST">IGST (Interstate)</option>
                                 <option value="CGST/SGST">CGST/SGST (Intrastate)</option>
                             </FormSelect>
                         </div>
                     </div>
-
-                    {/* Item Table */}
-                    <div className="border-t pt-6">
-                        <div className="hidden md:grid grid-cols-12 gap-3 px-2 py-2 font-semibold text-xs text-slate-500 uppercase">
-                            <div className="col-span-5">Item Details</div>
-                            <div className="col-span-1 text-right">Qty</div>
-                            <div className="col-span-2 text-right">Unit Price</div>
-                            <div className="col-span-2 text-right">Tax %</div>
-                            <div className="col-span-2 text-right">Line Total</div>
+                    
+                    {/* Line Items Section */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-gray-900">Line Items</h3>
+                            <button type="button" onClick={addLineItem} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                + Add Item
+                            </button>
                         </div>
-                        <div className="space-y-2">
-                        {lineItems.map((item, index) => {
-                            const amount = lineGross(item);
-                            return (
-                            <div key={item.id} className="grid grid-cols-12 gap-x-3 gap-y-2 p-2 rounded-md hover:bg-slate-50 items-start">
-                                <div className="col-span-12 md:col-span-5"><FormTextarea label="" value={item.description} onChange={e => handleLineItemChange(item.id, 'description', e.target.value)} placeholder="Item Description" rows={2} /></div>
-                                <div className="col-span-4 md:col-span-1"><FormInput label="" type="number" value={item.quantity} onChange={e => handleLineItemChange(item.id, 'quantity', +e.target.value)} placeholder="Qty" className="text-right" /></div>
-                                <div className="col-span-8 md:col-span-2"><FormInput label="" type="number" value={item.rate} onChange={e => handleLineItemChange(item.id, 'rate', +e.target.value)} placeholder="Unit Price" className="text-right" /></div>
-                                <div className="col-span-8 md:col-span-2">
-                                    <div className="flex items-center justify-end h-full">
-                                        <FormSelect label="" value={item.gstRate} onChange={e => handleLineItemChange(item.id, 'gstRate', +e.target.value)} onFocus={()=>handleLineItemChange(item.id, 'isGstApplicable', true)}>
-                                            {GST_RATES.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
-                                        </FormSelect>
+                        
+                        <div className="space-y-3">
+                            {lineItems.map((item, index) => (
+                                <div key={item.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                        <FormInput 
+                                            label="Description" 
+                                            value={item.description} 
+                                            onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                                            placeholder="Item description"
+                                        />
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <FormInput 
+                                                label="Qty" 
+                                                type="number"
+                                                value={item.quantity} 
+                                                onChange={e => handleLineItemChange(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                                                min="0"
+                                            />
+                                            <FormInput 
+                                                label="Rate" 
+                                                type="number"
+                                                value={item.rate} 
+                                                onChange={e => handleLineItemChange(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                                                min="0"
+                                                step="0.01"
+                                            />
+                                            <div className="flex items-end">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => removeLineItem(item.id)}
+                                                    className="bg-red-500 text-white px-2 py-2 rounded text-sm w-full"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="flex items-center space-x-2">
+                                            <input 
+                                                type="checkbox" 
+                                                id={`gst-${item.id}`}
+                                                checked={item.isGstApplicable} 
+                                                onChange={e => handleLineItemChange(item.id, 'isGstApplicable', e.target.checked)}
+                                                className="rounded"
+                                            />
+                                            <label htmlFor={`gst-${item.id}`} className="text-sm text-gray-700">GST Applicable</label>
+                                        </div>
+                                        {item.isGstApplicable && (
+                                            <FormSelect 
+                                                label="GST Rate" 
+                                                value={item.gstRate} 
+                                                onChange={e => handleLineItemChange(item.id, 'gstRate', parseInt(e.target.value) || 0)}
+                                            >
+                                                {GST_RATES.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+                                            </FormSelect>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="mt-3 text-sm text-gray-600">
+                                        Net: ₹{formatCurrency(lineNet(item))} | 
+                                        Tax: ₹{formatCurrency(lineTax(item))} | 
+                                        Total: ₹{formatCurrency(lineGross(item))}
                                     </div>
                                 </div>
-                                <div className="col-span-4 md:col-span-2 flex items-center justify-between h-full">
-                                    <p className="text-sm font-medium text-slate-800 text-right w-full pr-2">{formatCurrency(amount)}</p>
-                                    <button onClick={() => removeLineItem(item.id)} className="text-slate-400 hover:text-red-500">{React.cloneElement(Icons.trash, {className:"h-4 w-4"})}</button>
-                                </div>
-                            </div>
-                            )
-                        })}
+                            ))}
                         </div>
-                        <button onClick={addLineItem} className="mt-4 text-sm font-semibold text-brand-primary flex items-center gap-1">{Icons.plus} Add New Row</button>
+                    </div>
+                    
+                    {/* Notes Section */}
+                    <div>
+                        <FormTextarea
+                            label="Notes"
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                            placeholder="Additional notes or terms..."
+                            rows={3}
+                            disabled={isReadOnly && !isEditing}
+                        />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t">
-                        <FormTextarea label="Customer Notes (will be displayed on the invoice)" value={notes} onChange={e => setNotes(e.target.value)} rows={4} />
-                         <div className="space-y-2 text-sm">
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-600">Subtotal</span>
-                                <span className="font-medium text-slate-800">{formatCurrency(financialTotals.subtotal)}</span>
+                    {/* Saved Invoices Section */}
+                    <div>
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900">Saved Invoices</h3>
+                            <button
+                                onClick={() => {
+                                    // Reset to new invoice state
+                                    setInvoiceNumber(generateInvoiceNumber(settings.lastInvoiceNumber));
+                                    setInvoiceDate(new Date().toISOString().split('T')[0]);
+                                    setBilledToDetails(null);
+                                    setPlaceOfSupply('');
+                                    setLineItems([]);
+                                    setNotes("Thank you for your business. All payments are non-refundable.");
+                                    setGstType('IGST');
+                                    setTerms('Due on Receipt');
+                                    setDueDate('');
+                                    setCurrentInvoiceId(null);
+                                    setIsReadOnly(false);
+                                    setIsEditing(false);
+                                    setOriginalBilledToDetails(null);
+                                    setAuditLog([]);
+                                    const timestamp = new Date().toLocaleString();
+                                    setAuditLog([`${timestamp}: Started new invoice`]);
+                                }}
+                                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                            >
+                                + New Invoice
+                            </button>
+                        </div>
+                        {docket.invoices && docket.invoices.length > 0 ? (
+                            <div className="bg-gray-50 p-4 rounded-lg border max-h-40 overflow-y-auto">
+                                <div className="space-y-2 text-sm">
+                                    {docket.invoices.map((inv) => (
+                                        <button
+                                            key={inv.id}
+                                            onClick={() => loadInvoice(inv)}
+                                            className={`w-full flex justify-between items-center p-2 bg-white rounded border hover:bg-blue-50 transition-colors ${
+                                                currentInvoiceId === inv.id ? 'border-blue-500 bg-blue-50' : ''
+                                            }`}
+                                        >
+                                            <div className="text-left">
+                                                <div className="font-medium text-gray-800">{inv.invoiceNumber}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {formatDate(inv.date)} - {formatCurrency(inv.grandTotal)}
+                                                </div>
+                                            </div>
+                                            <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
+                                                {currentInvoiceId === inv.id ? 'Current' : 'Saved'}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-600">Total GST</span>
-                                <span className="font-medium text-slate-800">{formatCurrency(financialTotals.gstAmount)}</span>
+                        ) : (
+                            <div className="bg-gray-50 p-4 rounded-lg border text-center text-gray-500">
+                                No saved invoices yet
                             </div>
-                            <div className="flex justify-between items-center text-lg font-bold pt-2 border-t mt-2">
-                                <span className="text-slate-800">Total</span>
-                                <span className="text-slate-900">{formatCurrency(financialTotals.grandTotal)}</span>
+                        )}
+                    </div>
+
+                    {/* Audit Log Section */}
+                    {auditLog.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">Change Log</h3>
+                            <div className="bg-gray-50 p-4 rounded-lg border max-h-40 overflow-y-auto">
+                                <div className="space-y-2 text-sm">
+                                    {auditLog.map((log, index) => (
+                                        <div key={index} className="text-gray-700 border-b border-gray-200 pb-1">
+                                            {log}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
-          </div>
+            </div>
           
           {/* Preview Side */}
           <div id="invoice-preview-container" className="w-full lg:w-3/5 bg-slate-200 p-4 sm:p-8 overflow-y-auto">
@@ -409,109 +1172,89 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
               {/* Recipient */}
               <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
                 <div>
-                    <h4 className="font-semibold text-slate-600 mb-1">Billed To</h4>
+                    <h4 className="font-semibold text-slate-500 mb-1">Billed To</h4>
                     {billedToDetails ? (
-                        <div className="space-y-0.5">
-                            <p className="font-semibold text-slate-900">{billedToDetails.name}</p>
-                            {billedToDetails.address && <p className="text-slate-700 whitespace-pre-line">{billedToDetails.address}</p>}
-                            {billedToDetails.email && <p className="text-slate-700">{billedToDetails.email}</p>}
-                            {billedToDetails.phone && <p className="text-slate-700">{billedToDetails.phone}</p>}
-                        </div>
-                    ) : <p className="text-slate-400 italic">Select a customer</p>}
+                        <>
+                            <p className="font-bold text-slate-800">{billedToDetails.name}</p>
+                            <p className="text-slate-600 whitespace-pre-line">{billedToDetails.address}</p>
+                            <p className="text-slate-600">{billedToDetails.email}</p>
+                            {billedToDetails.phone && <p className="text-slate-600">{billedToDetails.phone}</p>}
+                            {billedToDetails.gstin && <p className="text-slate-600">GSTIN: {billedToDetails.gstin}</p>}
+                        </>
+                    ) : <p className="text-slate-400 italic">No billing details</p>}
                 </div>
-                <div className="text-right">
-                    <h4 className="font-semibold text-slate-600 mb-1">Remit To</h4>
-                    <div className="text-slate-700 text-sm">
-                        <p>Bank: {settings.bankName}</p>
-                        <p>A/C No: {settings.accountNumber}</p>
-                        <p>IFSC: {settings.ifscCode}</p>
-                    </div>
+                <div>
+                    <h4 className="font-semibold text-slate-500 mb-1">Remit To</h4>
+                    <p className="text-slate-600">Bank: {settings.bankName || 'N/A'}</p>
+                    <p className="text-slate-600">Account: {settings.accountNumber || 'N/A'}</p>
+                    <p className="text-slate-600">IFSC: {settings.ifscCode || 'N/A'}</p>
                 </div>
               </div>
               
               {/* Items Table */}
-              <table className="w-full mb-8 text-sm border-collapse">
+              <table className="w-full mb-8 text-sm">
                 <thead>
-                    <tr className="bg-slate-100 text-slate-700 uppercase text-xs">
-                        <th className="text-left p-2 font-semibold">Item Description</th>
-                        <th className="text-right p-2 font-semibold">Qty</th>
-                        <th className="text-right p-2 font-semibold">Unit Price</th>
-                        <th className="text-right p-2 font-semibold">Net Cost</th>
-                        <th className="text-right p-2 font-semibold">Tax %</th>
-                        <th className="text-right p-2 font-semibold">Gross Cost</th>
-                        <th className="text-right p-2 font-semibold">Total</th>
+                    <tr className="border-b-2 border-slate-200">
+                        <th className="text-left py-2 font-semibold text-slate-700">ITEM DESCRIPTION</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">QTY</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">UNIT PRICE</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">NET COST</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">TAX %</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">GROSS COST</th>
+                        <th className="text-right py-2 font-semibold text-slate-700">TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {lineItems.map((item, idx) => (
-                    <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                        <td className="p-2 align-top">{item.description}</td>
-                        <td className="text-right p-2 align-top">{item.quantity}</td>
-                        <td className="text-right p-2 align-top">{formatCurrency(item.rate)}</td>
-                        <td className="text-right p-2 align-top">{formatCurrency(lineNet(item))}</td>
-                        <td className="text-right p-2 align-top">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>
-                        <td className="text-right p-2 align-top">{formatCurrency(lineGross(item))}</td>
-                        <td className="text-right p-2 align-top">{formatCurrency(lineGross(item))}</td>
-                    </tr>
+                    {lineItems.map((item, index) => (
+                        <tr key={item.id} className="border-b border-slate-100">
+                            <td className="py-3 text-slate-800">{item.description}</td>
+                            <td className="py-3 text-right text-slate-600">{item.quantity}</td>
+                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(item.rate)}</td>
+                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(lineNet(item))}</td>
+                            <td className="py-3 text-right text-slate-600">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>
+                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(lineNet(item))}</td>
+                            <td className="py-3 text-right font-semibold text-slate-800">₹{formatCurrency(lineGross(item))}</td>
+                        </tr>
                     ))}
                 </tbody>
               </table>
-
-               {/* Summary */}
-               <div className="flex justify-between gap-8 mb-8">
-                    <div className="text-xs text-slate-600 max-w-md">
-                        <h4 className="font-semibold text-slate-600 mb-1">Amount in Words:</h4>
-                        <p>{amountToWords(financialTotals.grandTotal)} Only.</p>
+              
+              {/* Totals */}
+              <div className="flex justify-end mb-8">
+                <div className="w-64 text-sm">
+                    <div className="flex justify-between py-1">
+                        <span className="text-slate-600">Subtotal:</span>
+                        <span className="text-slate-800">₹{formatCurrency(financialTotals.subtotal)}</span>
                     </div>
-                    <div className="w-full max-w-sm space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-800">
-                            <span>Subtotal</span>
-                            <span>{formatCurrency(financialTotals.subtotal)}</span>
+                    {financialTotals.gstAmount > 0 && (
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-600">GST ({formatPercent(effectiveGstRate)}):</span>
+                            <span className="text-slate-800">₹{formatCurrency(financialTotals.gstAmount)}</span>
                         </div>
-
-                        {financialTotals.gstAmount > 0 && (
-                          <>
-                            {gstType === 'CGST/SGST' ? (
-                              <>
-                                <div className="flex justify-between text-slate-800">
-                                  <span>{`CGST @ ${formatPercent(effectiveGstRate / 2)}`}</span>
-                                  <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                </div>
-                                <div className="flex justify-between text-slate-800">
-                                  <span>{`SGST @ ${formatPercent(effectiveGstRate / 2)}`}</span>
-                                  <span>{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="flex justify-between text-slate-800">
-                                <span>{`IGST @ ${formatPercent(effectiveGstRate)}`}</span>
-                                <span>{formatCurrency(financialTotals.gstAmount)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        <div className="flex justify-between font-bold text-base text-slate-900 border-t pt-2 mt-2">
-                            <span>Grand Total</span>
-                            <span>{formatCurrency(financialTotals.grandTotal)}</span>
-                        </div>
+                    )}
+                    <div className="flex justify-between py-2 border-t-2 border-slate-200 font-bold text-lg">
+                        <span className="text-slate-800">Grand Total:</span>
+                        <span className="text-slate-900">₹{formatCurrency(financialTotals.grandTotal)}</span>
                     </div>
-               </div>
-               
-               {/* Footer */}
-               <div className="border-t border-slate-200 pt-4 text-xs text-slate-600">
-                   <div className="grid grid-cols-2 gap-6">
-                        <div>
-                            <h4 className="font-semibold text-slate-600 mb-1">Company Info</h4>
-                            <p className="whitespace-pre-line">{settings.companyAddress}</p>
-                            <p>{settings.companyContact}</p>
-                        </div>
-                        <div>
-                            <h4 className="font-semibold text-slate-600 mb-1">Terms & Conditions</h4>
-                            <p className="whitespace-pre-line">{notes}</p>
-                        </div>
-                   </div>
-               </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                        Amount in words: {amountToWords(financialTotals.grandTotal)}
+                    </div>
+                </div>
+              </div>
+              
+              {/* Notes */}
+              {notes && (
+                <div className="mb-8 text-sm">
+                    <h4 className="font-semibold text-slate-700 mb-2">Notes</h4>
+                    <p className="text-slate-600 whitespace-pre-line">{notes}</p>
+                </div>
+              )}
+              
+              {/* Footer */}
+              <div className="text-center text-xs text-slate-500 border-t-2 border-slate-200 pt-4">
+                <p>Thank you for your business!</p>
+                <p>This is a computer generated invoice.</p>
+              </div>
             </div>
           </div>
         </div>

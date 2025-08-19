@@ -14,6 +14,7 @@ import { CompanySettingsPage } from './components/CompanySettingsPage';
 import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
 import { ChangePasswordPage } from './components/ChangePasswordPage';
+import CustomerManagementPage from './components/CustomerManagementPage';
 import { usingDefaultKeys } from './services';
 
 /**
@@ -184,6 +185,8 @@ const AppContent: React.FC = () => {
                 return <UserProfilePage />;
             case 'deleted_log':
                  return currentUser.role === 'admin' ? <DeletedDocketsLog logs={deletionLog} /> : <p>Access Denied</p>;
+            case 'customers':
+                return <CustomerManagementPage />;
             default:
                 return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
         }

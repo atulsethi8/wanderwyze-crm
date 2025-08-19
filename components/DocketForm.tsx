@@ -6,7 +6,7 @@ import { useAuth } from '../hooks';
 import { Icons, Modal, Spinner, FormInput, FormTextarea, FormSelect } from './common';
 import { InvoiceGenerator } from './InvoiceGenerator';
 import { Type } from '@google/genai';
-import { InvoicePreview } from './InvoicePreview';
+
 
 interface DocketFormProps {
   docket: Docket | null;
@@ -128,7 +128,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     const [newSupplier, setNewSupplier] = useState<Omit<Supplier, 'id'>>({ name: '', contactPerson: '', contactNumber: '' });
     const [addPaxToFlightIndex, setAddPaxToFlightIndex] = useState<number | null>(null);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-    const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+
     const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
     const notificationTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     
@@ -531,10 +531,27 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
     };
     
     const handleSaveInvoice = (invoice: Invoice) => {
-        setFormState(p => ({
-            ...p,
-            invoices: [...(p.invoices || []), invoice]
-        }));
+        setFormState(p => {
+            const existingInvoices = p.invoices || [];
+            
+            // Check if this invoice already exists (by ID)
+            const existingIndex = existingInvoices.findIndex(inv => inv.id === invoice.id);
+            
+            let updatedInvoices;
+            if (existingIndex >= 0) {
+                // Replace the existing invoice
+                updatedInvoices = [...existingInvoices];
+                updatedInvoices[existingIndex] = invoice;
+            } else {
+                // Add new invoice
+                updatedInvoices = [...existingInvoices, invoice];
+            }
+            
+            return {
+                ...p,
+                invoices: updatedInvoices
+            };
+        });
     };
 
     const handleSaveClick = async () => {
@@ -982,24 +999,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
               <div className="bg-slate-50 p-4 rounded-lg shadow-sm">
                   <h3 className="font-semibold mb-3">Actions</h3>
                   <button onClick={() => setInvoiceModalOpen(true)} disabled={!docket?.id} className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed">Generate Invoice</button>
-                  {formState.invoices && formState.invoices.length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                          <h4 className="font-semibold text-sm mb-2 text-slate-600">Generated Invoices</h4>
-                          <div className="space-y-2">
-                              {[...formState.invoices].reverse().map(inv => (
-                                  <div key={inv.id} className="flex justify-between items-center bg-white p-2 rounded-md border">
-                                      <div>
-                                          <p className="font-semibold text-sm text-slate-800">{inv.invoiceNumber}</p>
-                                          <p className="text-xs text-slate-500">{formatDate(inv.date)} - {formatCurrency(inv.grandTotal)}</p>
-                                      </div>
-                                      <button onClick={() => setPreviewInvoice(inv)} className="px-3 py-1 text-xs bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300">
-                                          Preview
-                                      </button>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  )}
+
               </div>
             )}
             <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200"><h3 className="font-semibold mb-3 text-blue-800">Financial Summary</h3><div className="space-y-2 text-sm">{Object.entries(summaryItems).map(([key, value]) => (<div key={key} className="flex justify-between items-center"><span className="capitalize text-slate-600">{key}</span><div className="text-right"><p className="font-semibold text-slate-800">{formatCurrency(value.grossBilled)} <span className={`text-xs ${value.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>({formatCurrency(value.profit)})</span></p></div></div>))}<div className="pt-2 border-t mt-2"><div className="flex justify-between font-bold"><span className="text-slate-700">Grand Total</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalGross)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Total Net</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalNet)}</span></div><div className="flex justify-between font-bold text-green-700"><span >Total Profit</span><span>{formatCurrency(financialSummary.grandTotalProfit)}</span></div></div><div className="pt-2 border-t mt-2"><div className="flex justify-between"><span className="text-slate-700">Amount Paid</span><span className="text-green-700 font-semibold">{formatCurrency(financialSummary.amountPaid)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Balance Due</span><span className="text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span></div></div></div></div><div className="space-y-4">{!isReadOnly ? (
@@ -1046,11 +1046,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             )}
         </Modal>
 
-        {previewInvoice && (
-            <Modal isOpen={!!previewInvoice} onClose={() => setPreviewInvoice(null)} title={`Preview Invoice: ${previewInvoice.invoiceNumber}`} width="max-w-5xl">
-                <InvoicePreview invoice={previewInvoice} />
-            </Modal>
-        )}
+
 
         {previewFile && (
           <Modal isOpen={!!previewFile} onClose={() => setPreviewFile(null)} title={`View File: ${previewFile.name}`} width="max-w-5xl">

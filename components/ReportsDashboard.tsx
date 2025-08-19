@@ -4,6 +4,7 @@ import { Docket, Agent, AuthUser } from '../types';
 import { formatCurrency, formatDate } from '../services';
 import { FormInput, Icons } from './common';
 import { useAuth } from '../hooks';
+import InvoiceReportPage from './InvoiceReportPage';
 
 interface ReportsDashboardProps {
   dockets: Docket[];
@@ -27,6 +28,7 @@ const calculateDocketTotals = (docket: Docket) => {
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents, onOpenDocket }) => {
   const { currentUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<'dockets' | 'invoices'>('dockets');
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
@@ -34,6 +36,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   const [filterType, setFilterType] = useState<'creation' | 'departure'>('departure');
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
+  const [balanceFilter, setBalanceFilter] = useState<'all' | 'outstanding'>('all');
 
   const docketsForReporting = useMemo(() => {
     if (currentUser?.role === 'admin') {
@@ -122,18 +125,59 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
 
   const docketsByAgentDest = useMemo(() => {
     return docketsByAgent.filter(d => {
-      if (destinationFilter === 'all') return true;
-      const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
-      return dest === destinationFilter;
+      // Destination filter
+      if (destinationFilter !== 'all') {
+        const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+        if (dest !== destinationFilter) return false;
+      }
+      
+      // Balance filter
+      if (balanceFilter === 'outstanding') {
+        const { grossBilled } = calculateDocketTotals(d);
+        const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+        const balance = Math.max(0, grossBilled - paid);
+        if (balance === 0) return false;
+      }
+      
+      return true;
     });
-  }, [docketsByAgent, destinationFilter]);
+  }, [docketsByAgent, destinationFilter, balanceFilter]);
 
   const handleOpen = (id: string) => onOpenDocket(id);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 bg-slate-100 min-h-full">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-slate-800 mb-6">Docket Reports</h1>
+        <h1 className="text-3xl font-bold text-slate-800 mb-6">Reports Dashboard</h1>
+        
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-6">
+          <button
+            onClick={() => setActiveTab('dockets')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'dockets'
+                ? 'bg-brand-primary text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            Docket Reports
+          </button>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'invoices'
+                ? 'bg-brand-primary text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            Invoice Reports
+          </button>
+        </div>
+
+        {activeTab === 'invoices' ? (
+          <InvoiceReportPage onOpenDocket={onOpenDocket} />
+        ) : (
+          <>
         
         <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
@@ -175,22 +219,27 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
             />
         </div>
         
-        {/* Agent Performance - Dockets List with filter */}
+        {/* Comprehensive Dockets Report */}
         <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-slate-700">Agent Performance</h2>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-600">Agent:</label>
-              <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
-                <option value="all">All</option>
-                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              <label className="text-sm text-slate-600 ml-4">Destination:</label>
-              <select value={destinationFilter} onChange={e => setDestinationFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
-                <option value="all">All</option>
-                {destinationOptions.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
+            <h2 className="text-xl font-semibold text-slate-700">Dockets Report</h2>
+                         <div className="flex items-center gap-2">
+               <label className="text-sm text-slate-600">Agent:</label>
+               <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
+                 <option value="all">All</option>
+                 {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+               </select>
+               <label className="text-sm text-slate-600 ml-4">Destination:</label>
+               <select value={destinationFilter} onChange={e => setDestinationFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
+                 <option value="all">All</option>
+                 {destinationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+               </select>
+               <label className="text-sm text-slate-600 ml-4">Balance:</label>
+               <select value={balanceFilter} onChange={e => setBalanceFilter(e.target.value as 'all' | 'outstanding')} className="text-sm border rounded-md px-2 py-1">
+                 <option value="all">All Dockets</option>
+                 <option value="outstanding">Outstanding Balance</option>
+               </select>
+             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
@@ -199,6 +248,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket No</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Client Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Destination</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Billed</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Amount Paid</th>
@@ -218,12 +269,16 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                     sumProfit += profit;
                     const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
                     const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
+                    const mainDestination = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+                    const agentName = d.agentId ? agents.find(a => a.id === d.agentId)?.name : 'N/A';
                     const rowBg = balance === 0 ? '#d4edda' : '#f8d7da';
                     return (
                       <tr key={d.id} style={{ backgroundColor: rowBg }}>
                         <td className="px-4 py-3 text-sm text-slate-600">{created}</td>
                         <td className="px-4 py-3 text-sm"><button onClick={() => onOpenDocket(d.id)} className="text-brand-primary underline">{d.docketNo || d.id}</button></td>
                         <td className="px-4 py-3 text-sm text-slate-800">{d.client.name}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{agentName}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{mainDestination}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(departureDate)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(grossBilled)}</td>
                         <td className="px-4 py-3 text-sm text-slate-800">{formatCurrency(paid)}</td>
@@ -234,7 +289,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   });
                   rows.push(
                     <tr key="agent-totals" className="bg-slate-50 font-semibold">
-                      <td className="px-4 py-3" colSpan={4}>Totals</td>
+                      <td className="px-4 py-3" colSpan={6}>Totals</td>
                       <td className="px-4 py-3">{formatCurrency(sumBilled)}</td>
                       <td className="px-4 py-3">{formatCurrency(sumPaid)}</td>
                       <td className="px-4 py-3">{formatCurrency(sumProfit)}</td>
@@ -244,85 +299,14 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   return rows;
                 })()}
                 {docketsByAgentDest.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
+                  <tr><td colSpan={10} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
-
-        {/* Dockets List */}
-        <div className="bg-white rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-slate-700 p-6">Dockets with Outstanding Balance</h2>
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
-                    <thead className="bg-slate-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">PAX Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Destination</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Dep. Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Gross</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Net</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Outstanding</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Docket No</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-200">
-                        {(() => {
-                          const rows = filteredDockets.filter(d => {
-                            const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-                            const { grossBilled } = calculateDocketTotals(d);
-                            return grossBilled - paid > 0;
-                          });
-                          let totalProfit = 0;
-                          const rendered = rows.map(docket => {
-                            const { grossBilled, netCost } = calculateDocketTotals(docket);
-                            const profit = grossBilled - netCost;
-                            const mainDestination = docket.itinerary.flights[0]?.arrivalAirport || docket.itinerary.hotels[0]?.name || 'N/A';
-                            const departureDate = docket.itinerary.flights[0]?.departureDate || docket.itinerary.hotels[0]?.checkIn || 'N/A';
-                            const agentName = docket.agentId ? agents.find(a => a.id === docket.agentId)?.name : 'N/A';
-                            const paid = (docket.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-                            const outstanding = Math.max(0, grossBilled - paid);
-                            totalProfit += profit;
-                            const rowBg = outstanding === 0 ? '#d4edda' : '#f8d7da';
-                            
-                            return (
-                                <tr key={docket.id} className="hover:bg-slate-50" style={{ backgroundColor: rowBg }}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.client.name}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{agentName}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{mainDestination}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatDate(departureDate)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(grossBilled)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(netCost)}</td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(outstanding)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <button onClick={() => handleOpen(docket.id)} className="text-brand-primary underline">
-                                            {docket.docketNo || docket.id}
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                          });
-                          // Append totals row
-                          rendered.push(
-                            <tr key="totals" className="bg-slate-50 font-semibold">
-                              <td className="px-6 py-3" colSpan={6}>Total Profit</td>
-                              <td className="px-6 py-3">{formatCurrency(totalProfit)}</td>
-                              <td className="px-6 py-3"></td>
-                            </tr>
-                          );
-                          return rendered;
-                        })()}
-                        {filteredDockets.length === 0 && (
-                            <tr><td colSpan={9} className="text-center py-10 text-slate-500">No dockets found for the selected date range.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

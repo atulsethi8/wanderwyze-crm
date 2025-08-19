@@ -45,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                             <button onClick={() => onNavigate('dashboard')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Dashboard</button>
                             <button onClick={() => onNavigate('calendar')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">PAX Calendar</button>
                             <button onClick={() => onNavigate('reports')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Reports</button>
+                            <button onClick={() => onNavigate('customers')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Customers</button>
                             {currentUser?.role === 'admin' && (
                                 <div className="relative" ref={adminRef}>
                                     <button onClick={() => setAdminOpen(!adminOpen)} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted flex items-center">
