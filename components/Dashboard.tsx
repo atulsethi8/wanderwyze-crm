@@ -212,11 +212,10 @@ interface DashboardProps {
   dockets: Docket[];
   agents: Agent[];
   onSelectDocket: (id: string) => void;
+  searchTerm?: string;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ dockets, agents, onSelectDocket }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
+export const Dashboard: React.FC<DashboardProps> = ({ dockets, agents, onSelectDocket, searchTerm = '' }) => {
   const filteredDockets = useMemo(() => {
     if (!searchTerm) return dockets;
     const lowercasedFilter = searchTerm.toLowerCase();
@@ -229,20 +228,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ dockets, agents, onSelectD
   return (
     <div className="p-4 sm:p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-                 <div className="relative">
-                    <input
-                        type="text"
-                        placeholder="Search by client, PAX, destination, agent, ID..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border bg-white border-slate-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                    />
-                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </div>
-                 </div>
-            </div>
             {filteredDockets.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredDockets.map(docket => {

@@ -67,6 +67,7 @@ const AppContent: React.FC = () => {
     const { dockets, getDocketById, saveDocket, deleteDocket, suppliers, saveSupplier, agents, saveAgent, users, updateUserRole, deletionLog, loading: docketsLoading } = useDockets();
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedDocketId, setSelectedDocketId] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // This is the most important check. If default keys are used, block the entire app.
     if (usingDefaultKeys) {
@@ -93,6 +94,7 @@ const AppContent: React.FC = () => {
 
     const handleNavigation = (view: string) => {
         setSelectedDocketId(null);
+        setSearchTerm(''); // Clear search when navigating
         navigate(`/${view}`);
     };
     
@@ -129,6 +131,9 @@ const AppContent: React.FC = () => {
         return selectedDocketId ? getDocketById(selectedDocketId) : null;
     }, [selectedDocketId, getDocketById]);
 
+    // Only show search in header for dashboard view
+    const showSearchInHeader = currentView === 'dashboard';
+
 
     if (authLoading) {
         return (
@@ -157,7 +162,7 @@ const AppContent: React.FC = () => {
     const renderContent = () => {
         switch(currentView) {
             case 'dashboard':
-                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
+                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} searchTerm={searchTerm} />;
             case 'form':
                 return <DocketForm 
                     docket={selectedDocket} 
@@ -188,13 +193,19 @@ const AppContent: React.FC = () => {
             case 'customers':
                 return <CustomerManagementPage />;
             default:
-                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} />;
+                return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} searchTerm={searchTerm} />;
         }
     }
 
     return (
         <div className="flex flex-col min-h-screen">
-            <Header onNewDocket={handleNewDocket} onNavigate={handleNavigation} currentUser={currentUser} />
+            <Header 
+                onNewDocket={handleNewDocket} 
+                onNavigate={handleNavigation} 
+                currentUser={currentUser}
+                searchTerm={showSearchInHeader ? searchTerm : ''}
+                onSearchChange={showSearchInHeader ? setSearchTerm : undefined}
+            />
             <main className="flex-grow">
                 {renderContent()}
             </main>
