@@ -34,45 +34,99 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
     </details>
 );
 
-const NewPaymentForm: React.FC<{onAddPayment: (p: Omit<Payment, 'id'>) => void, disabled: boolean}> = ({onAddPayment, disabled}) => {
+const NewPaymentForm: React.FC<{onAddPayment: (p: Omit<Payment, 'id'>) => Promise<void>, disabled: boolean}> = ({onAddPayment, disabled}) => {
     const [amount, setAmount] = useState<number | ''>('');
     const [type, setType] = useState(PaymentType.BankTransfer);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if(amount && +amount > 0) {
-            onAddPayment({amount: +amount, type, date, notes});
-            setAmount(''); setNotes('');
+        if(amount && +amount > 0 && !isSubmitting) {
+            setIsSubmitting(true);
+            try {
+                await onAddPayment({amount: +amount, type, date, notes});
+                setAmount(''); 
+                setNotes('');
+            } catch (error) {
+                console.error('Failed to add payment:', error);
+            } finally {
+                setIsSubmitting(false);
+            }
         }
     }
     return (
         <form onSubmit={handleSubmit} className="p-4 bg-slate-100 rounded-lg grid grid-cols-2 gap-4 items-end">
-             <div className="col-span-2"><FormInput label="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value ? +e.target.value : '')} required disabled={disabled} /></div>
-             <FormSelect label="Payment Type" value={type} onChange={e => setType(e.target.value as PaymentType)} disabled={disabled}>
+             <div className="col-span-2"><FormInput label="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value ? +e.target.value : '')} required disabled={disabled || isSubmitting} /></div>
+             <FormSelect label="Payment Type" value={type} onChange={e => setType(e.target.value as PaymentType)} disabled={disabled || isSubmitting}>
                 {Object.values(PaymentType).map(t => <option key={t}>{t}</option>)}
              </FormSelect>
-             <FormInput label="Date" type="date" value={date} onChange={e => setDate(e.target.value)} icon={Icons.calendar} disabled={disabled} />
-             <div className="col-span-2"><FormInput label="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} disabled={disabled} /></div>
-             <div className="col-span-2"><button type="submit" className="w-full bg-green-600 text-white font-semibold py-2 rounded-md hover:bg-green-700 disabled:bg-slate-400" disabled={disabled}>Add Payment</button></div>
+             <FormInput label="Date" type="date" value={date} onChange={e => setDate(e.target.value)} icon={Icons.calendar} disabled={disabled || isSubmitting} />
+             <div className="col-span-2"><FormInput label="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} disabled={disabled || isSubmitting} /></div>
+             <div className="col-span-2">
+                <button 
+                    type="submit" 
+                    className="w-full bg-green-600 text-white font-semibold py-2 rounded-md hover:bg-green-700 disabled:bg-slate-400 flex items-center justify-center gap-2" 
+                    disabled={disabled || isSubmitting || !amount || +amount <= 0}
+                >
+                    {isSubmitting ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Saving...
+                        </>
+                    ) : (
+                        'Add Payment'
+                    )}
+                </button>
+             </div>
         </form>
     );
 };
 
-const NewCommentForm: React.FC<{onAddComment: (text: string) => void}> = ({onAddComment}) => {
+const NewCommentForm: React.FC<{onAddComment: (text: string) => Promise<void>}> = ({onAddComment}) => {
     const [text, setText] = useState('');
-    const handleSubmit = (e: React.FormEvent) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if(text.trim()) {
-            onAddComment(text);
-            setText('');
+        if(text.trim() && !isSubmitting) {
+            setIsSubmitting(true);
+            try {
+                await onAddComment(text);
+                setText('');
+            } catch (error) {
+                console.error('Failed to add comment:', error);
+            } finally {
+                setIsSubmitting(false);
+            }
         }
     }
     return (
         <form onSubmit={handleSubmit} className="flex gap-2">
-            <FormInput label="" type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment..." className="w-full" />
-            <button type="submit" className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-md">Add</button>
+            <FormInput 
+                label="" 
+                type="text" 
+                value={text} 
+                onChange={e => setText(e.target.value)} 
+                placeholder="Add a comment..." 
+                className="w-full"
+                disabled={isSubmitting}
+            />
+            <button 
+                type="submit" 
+                disabled={isSubmitting || !text.trim()}
+                className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-md disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+                {isSubmitting ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Saving...
+                    </>
+                ) : (
+                    'Add'
+                )}
+            </button>
         </form>
     )
 }
@@ -378,7 +432,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         };
     }, [formState.itinerary, formState.payments]);
     
-    const addPayment = (payment: Omit<Payment, 'id'>) => {
+    const addPayment = async (payment: Omit<Payment, 'id'>) => {
         const newPayment: Payment = { ...payment, id: `PAY-${Date.now()}` };
         const comment: Comment = {
             id: `SYS-PAY-${Date.now()}`,
@@ -387,12 +441,48 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             author: "System",
             isSystem: true,
         };
-        setFormState(p => ({ ...p, payments: [newPayment, ...p.payments], comments: [comment, ...p.comments] }));
+        const updatedFormState = { ...formState, payments: [newPayment, ...formState.payments], comments: [comment, ...formState.comments] };
+        setFormState(updatedFormState);
+        
+        // Auto-save the docket to persist the payment and comment immediately
+        if (docket?.id) {
+            try {
+                await onSave(updatedFormState, docket.id);
+                // Show a brief success indicator for the auto-save
+                setShowSaveSuccess(true);
+                if (notificationTimer.current) clearTimeout(notificationTimer.current);
+                notificationTimer.current = setTimeout(() => {
+                    setShowSaveSuccess(false);
+                }, 2000);
+            } catch (error) {
+                console.error('Failed to auto-save payment:', error);
+                // Optionally show an error message to the user
+                alert('Failed to save payment. Please try again.');
+            }
+        }
     };
     
-    const addComment = (text: string) => {
+    const addComment = async (text: string) => {
         const newComment: Comment = { id: `COM-${Date.now()}`, text, timestamp: new Date().toISOString(), author: currentUser?.email };
-        setFormState(p => ({ ...p, comments: [newComment, ...p.comments] }));
+        const updatedFormState = { ...formState, comments: [newComment, ...formState.comments] };
+        setFormState(updatedFormState);
+        
+        // Auto-save the docket to persist the comment immediately
+        if (docket?.id) {
+            try {
+                await onSave(updatedFormState, docket.id);
+                // Show a brief success indicator for the auto-save
+                setShowSaveSuccess(true);
+                if (notificationTimer.current) clearTimeout(notificationTimer.current);
+                notificationTimer.current = setTimeout(() => {
+                    setShowSaveSuccess(false);
+                }, 2000);
+            } catch (error) {
+                console.error('Failed to auto-save comment:', error);
+                // Optionally show an error message to the user
+                alert('Failed to save comment. Please try again.');
+            }
+        }
     };
     
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, linkedItemId?: string, linkedItemType?: 'flight' | 'hotel' | 'excursion' | 'transfer') => {
