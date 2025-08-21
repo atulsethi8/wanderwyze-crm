@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useDockets } from '../hooks';
 import { Invoice } from '../types';
 import { formatCurrency, formatDate } from '../services';
+import { exportToExcel, exportToPDF, formatCurrencyForExport, formatDateForExport, ExportData } from '../services/exportService';
 
 interface InvoiceReportPageProps {
   onOpenDocket: (id: string) => void;
@@ -17,6 +18,7 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [searchQuery, setSearchQuery] = useState('');
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'outstanding'>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Get all invoices from all dockets
   const allInvoices = useMemo(() => {
@@ -163,6 +165,95 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
     onOpenDocket(docketId);
   };
 
+  const prepareExportData = (): ExportData => {
+    const headers = [
+      'Date',
+      'Invoice Number',
+      'Passenger Name',
+      'GST Number',
+      'Amount',
+      'Docket Number',
+      'Email',
+      'Phone'
+    ];
+
+    const rows = filteredInvoices.map(invoice => [
+      formatDateForExport(invoice.date),
+      invoice.invoiceNumber,
+      invoice.paxName,
+      invoice.billedTo?.gstin || 'N/A',
+      formatCurrencyForExport(invoice.grandTotal),
+      invoice.docketNumber,
+      invoice.billedTo?.email || 'N/A',
+      invoice.billedTo?.phone || 'N/A'
+    ]);
+
+    // Add totals row
+    rows.push([
+      'TOTALS',
+      '',
+      '',
+      '',
+      formatCurrencyForExport(summaryStats.totalAmount),
+      '',
+      '',
+      ''
+    ]);
+
+    const filters = [
+      filterType !== 'all' ? `Filter: ${filterType}` : null,
+      filterType === 'date' && startDate && endDate ? `Date Range: ${formatDateForExport(startDate)} to ${formatDateForExport(endDate)}` : null,
+      filterType === 'monthly' && selectedMonth ? `Month: ${selectedMonth}` : null,
+      filterType === 'quarterly' && selectedQuarter && selectedYear ? `Quarter: Q${selectedQuarter} ${selectedYear}` : null,
+      filterType === 'yearly' && selectedYear ? `Year: ${selectedYear}` : null,
+      balanceFilter === 'outstanding' ? 'Outstanding Balance Only' : null,
+      searchQuery ? `Search: ${searchQuery}` : null
+    ].filter(Boolean).join(', ');
+
+    return {
+      headers,
+      rows,
+      title: 'Invoice Report',
+      dateRange: filterType === 'date' && startDate && endDate ? `${formatDateForExport(startDate)} to ${formatDateForExport(endDate)}` : undefined,
+      filters: filters || 'All filters'
+    };
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const exportData = prepareExportData();
+      const result = exportToExcel(exportData);
+      if (result.success) {
+        alert(`Excel file exported successfully: ${result.filename}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Export failed: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `Invoice_Report_${timestamp}.pdf`;
+      const result = await exportToPDF('invoice-report-table', filename);
+      if (result.success) {
+        alert(`PDF file exported successfully: ${result.filename}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Export failed: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -223,7 +314,40 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-6 border border-gray-200 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+          <div className="flex items-center gap-3">
+            {/* Export Buttons */}
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              )}
+              Export Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+              )}
+              Export PDF
+            </button>
+          </div>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {/* Filter Type */}
@@ -371,7 +495,7 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
             No invoices found matching your criteria.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div id="invoice-report-table" className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>

@@ -5,6 +5,7 @@ import { formatCurrency, formatDate } from '../services';
 import { FormInput, Icons } from './common';
 import { useAuth } from '../hooks';
 import InvoiceReportPage from './InvoiceReportPage';
+import { exportToExcel, exportToPDF, formatCurrencyForExport, formatDateForExport, ExportData } from '../services/exportService';
 
 interface ReportsDashboardProps {
   dockets: Docket[];
@@ -37,6 +38,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'outstanding'>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   const docketsForReporting = useMemo(() => {
     if (currentUser?.role === 'admin') {
@@ -145,6 +147,122 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
 
   const handleOpen = (id: string) => onOpenDocket(id);
 
+  const prepareExportData = (): ExportData => {
+    const headers = [
+      'Docket Date',
+      'Docket No',
+      'Client Name',
+      'Agent',
+      'Destination',
+      'Departure Date',
+      'Total Billed',
+      'Amount Paid',
+      'Profit',
+      'Balance Due'
+    ];
+
+    const rows = docketsByAgentDest.map(d => {
+      const { grossBilled, netCost } = calculateDocketTotals(d);
+      const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+      const profit = (grossBilled - netCost);
+      const balance = Math.max(0, grossBilled - paid);
+      const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
+      const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
+      const mainDestination = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+      const agentName = d.agentId ? agents.find(a => a.id === d.agentId)?.name : 'N/A';
+
+      return [
+        created,
+        d.docketNo || d.id,
+        d.client.name,
+        agentName,
+        mainDestination,
+        formatDateForExport(departureDate),
+        formatCurrencyForExport(grossBilled),
+        formatCurrencyForExport(paid),
+        formatCurrencyForExport(profit),
+        formatCurrencyForExport(balance)
+      ];
+    });
+
+    // Add totals row
+    const totals = docketsByAgentDest.reduce((acc, d) => {
+      const { grossBilled, netCost } = calculateDocketTotals(d);
+      const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+      const profit = (grossBilled - netCost);
+      const balance = Math.max(0, grossBilled - paid);
+      
+      return {
+        grossBilled: acc.grossBilled + grossBilled,
+        paid: acc.paid + paid,
+        profit: acc.profit + profit,
+        balance: acc.balance + balance
+      };
+    }, { grossBilled: 0, paid: 0, profit: 0, balance: 0 });
+
+    rows.push([
+      'TOTALS',
+      '',
+      '',
+      '',
+      '',
+      '',
+      formatCurrencyForExport(totals.grossBilled),
+      formatCurrencyForExport(totals.paid),
+      formatCurrencyForExport(totals.profit),
+      formatCurrencyForExport(totals.balance)
+    ]);
+
+    const filters = [
+      agentFilter !== 'all' ? `Agent: ${agents.find(a => a.id === agentFilter)?.name}` : null,
+      destinationFilter !== 'all' ? `Destination: ${destinationFilter}` : null,
+      balanceFilter === 'outstanding' ? 'Outstanding Balance Only' : null
+    ].filter(Boolean).join(', ');
+
+    return {
+      headers,
+      rows,
+      title: 'Dockets Report',
+      dateRange: `${formatDateForExport(dateRange.start)} to ${formatDateForExport(dateRange.end)} (${filterType})`,
+      filters: filters || 'All filters'
+    };
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const exportData = prepareExportData();
+      const result = exportToExcel(exportData);
+      if (result.success) {
+        alert(`Excel file exported successfully: ${result.filename}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Export failed: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `Dockets_Report_${timestamp}.pdf`;
+      const result = await exportToPDF('dockets-report-table', filename);
+      if (result.success) {
+        alert(`PDF file exported successfully: ${result.filename}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Export failed: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 md:p-8 bg-slate-100 min-h-full">
       <div className="max-w-7xl mx-auto">
@@ -223,7 +341,39 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
         <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-700">Dockets Report</h2>
-                         <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Export Buttons */}
+              <button
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {isExporting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                )}
+                Export Excel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {isExporting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                  </svg>
+                )}
+                Export PDF
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mb-4">
                <label className="text-sm text-slate-600">Agent:</label>
                <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} className="text-sm border rounded-md px-2 py-1">
                  <option value="all">All</option>
@@ -240,8 +390,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                  <option value="outstanding">Outstanding Balance</option>
                </select>
              </div>
-          </div>
-          <div className="overflow-x-auto">
+          <div id="dockets-report-table" className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
