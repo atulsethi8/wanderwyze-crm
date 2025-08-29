@@ -80,7 +80,6 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                         <button onClick={() => onNavigate('dashboard')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Dashboard</button>
                         <button onClick={() => onNavigate('calendar')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">PAX Calendar</button>
                         <button onClick={() => onNavigate('reports')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Reports</button>
-                        <button onClick={() => onNavigate('customers')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Customers</button>
                         {currentUser?.role === 'admin' && (
                             <div className="relative" ref={adminRef}>
                                 <button onClick={() => setAdminOpen(!adminOpen)} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted flex items-center">
@@ -89,6 +88,7 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                                 {adminOpen && (
                                     <div className="origin-top-right absolute left-0 mt-2 w-48 rounded-md shadow-lg var-bg ring-1 ring-border">
                                         <div className="py-1" role="menu" aria-orientation="vertical">
+                                            <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('customers'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-fg hover:bg-muted" role="menuitem">Customers</a>
                                             <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('users'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-fg hover:bg-muted" role="menuitem">User Management</a>
                                             <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('agents'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-fg hover:bg-muted" role="menuitem">Agents</a>
                                             <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('settings'); setAdminOpen(false); }} className="block px-4 py-2 text-sm text-fg hover:bg-muted" role="menuitem">Company Settings</a>
@@ -182,11 +182,11 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                             <button onClick={() => handleMobileNavigation('dashboard')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Dashboard</button>
                             <button onClick={() => handleMobileNavigation('calendar')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">PAX Calendar</button>
                             <button onClick={() => handleMobileNavigation('reports')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Reports</button>
-                            <button onClick={() => handleMobileNavigation('customers')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Customers</button>
                             {currentUser?.role === 'admin' && (
                                 <>
                                     <div className="border-t border-border pt-2 mt-2">
                                         <div className="px-3 py-2 text-xs font-semibold text-muted uppercase tracking-wider">Admin</div>
+                                        <button onClick={() => handleMobileNavigation('customers')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Customers</button>
                                         <button onClick={() => handleMobileNavigation('users')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">User Management</button>
                                         <button onClick={() => handleMobileNavigation('agents')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Agents</button>
                                         <button onClick={() => handleMobileNavigation('settings')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Company Settings</button>

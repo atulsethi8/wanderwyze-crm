@@ -419,6 +419,12 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         const grandTotalNet = flightsTotal.netCost + hotelsTotal.netCost + excursionsTotal.netCost + transfersTotal.netCost;
         const totalPaid = formState.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
+        // Calculate total GST from saved invoices
+        const totalGST = formState.invoices?.reduce((sum, invoice) => sum + (invoice.gstAmount || 0), 0) || 0;
+        
+        // Calculate grand total including GST
+        const grandTotalWithGST = grandTotalGross + totalGST;
+
         return {
             flights: { netCost: flightsTotal.netCost, grossBilled: flightsTotal.grossBilled, profit: flightsTotal.grossBilled - flightsTotal.netCost },
             hotels: { netCost: hotelsTotal.netCost, grossBilled: hotelsTotal.grossBilled, profit: hotelsTotal.grossBilled - hotelsTotal.netCost },
@@ -426,11 +432,13 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
             transfers: { netCost: transfersTotal.netCost, grossBilled: transfersTotal.grossBilled, profit: transfersTotal.grossBilled - transfersTotal.netCost },
             grandTotalGross,
             grandTotalNet,
+            grandTotalWithGST,
+            totalGST,
             grandTotalProfit: grandTotalGross - grandTotalNet,
             amountPaid: totalPaid,
-            balanceDue: grandTotalGross - totalPaid
+            balanceDue: grandTotalWithGST - totalPaid
         };
-    }, [formState.itinerary, formState.payments]);
+    }, [formState.itinerary, formState.payments, formState.invoices]);
     
     const addPayment = async (payment: Omit<Payment, 'id'>) => {
         const newPayment: Payment = { ...payment, id: `PAY-${Date.now()}` };
@@ -1092,7 +1100,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
 
               </div>
             )}
-            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200"><h3 className="font-semibold mb-3 text-blue-800">Financial Summary</h3><div className="space-y-2 text-sm">{Object.entries(summaryItems).map(([key, value]) => (<div key={key} className="flex justify-between items-center"><span className="capitalize text-slate-600">{key}</span><div className="text-right"><p className="font-semibold text-slate-800">{formatCurrency(value.grossBilled)} <span className={`text-xs ${value.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>({formatCurrency(value.profit)})</span></p></div></div>))}<div className="pt-2 border-t mt-2"><div className="flex justify-between font-bold"><span className="text-slate-700">Grand Total</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalGross)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Total Net</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalNet)}</span></div><div className="flex justify-between font-bold text-green-700"><span >Total Profit</span><span>{formatCurrency(financialSummary.grandTotalProfit)}</span></div></div><div className="pt-2 border-t mt-2"><div className="flex justify-between"><span className="text-slate-700">Amount Paid</span><span className="text-green-700 font-semibold">{formatCurrency(financialSummary.amountPaid)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Balance Due</span><span className="text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span></div></div></div></div><div className="space-y-4">{!isReadOnly ? (
+            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200"><h3 className="font-semibold mb-3 text-blue-800">Financial Summary</h3><div className="space-y-2 text-sm">{Object.entries(summaryItems).map(([key, value]) => (<div key={key} className="flex justify-between items-center"><span className="capitalize text-slate-600">{key}</span><div className="text-right"><p className="font-semibold text-slate-800">{formatCurrency(value.grossBilled)} <span className={`text-xs ${value.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>({formatCurrency(value.profit)})</span></p></div></div>))}<div className="pt-2 border-t mt-2"><div className="flex justify-between font-bold"><span className="text-slate-700">Grand Total</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalGross)}</span></div>{financialSummary.totalGST > 0 && (<div className="flex justify-between"><span className="text-slate-700">Total GST</span><span className="text-blue-600 font-semibold">{formatCurrency(financialSummary.totalGST)}</span></div>)}<div className="flex justify-between font-bold"><span className="text-slate-700">Total with GST</span><span className="text-blue-800">{formatCurrency(financialSummary.grandTotalWithGST)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Total Net</span><span className="text-slate-900">{formatCurrency(financialSummary.grandTotalNet)}</span></div><div className="flex justify-between font-bold text-green-700"><span >Total Profit</span><span>{formatCurrency(financialSummary.grandTotalProfit)}</span></div></div><div className="pt-2 border-t mt-2"><div className="flex justify-between"><span className="text-slate-700">Amount Paid</span><span className="text-green-700 font-semibold">{formatCurrency(financialSummary.amountPaid)}</span></div><div className="flex justify-between font-bold"><span className="text-slate-700">Balance Due</span><span className="text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span></div></div>{formState.invoices && formState.invoices.length > 0 && (<div className="pt-2 border-t mt-2"><div className="text-xs text-slate-600 mb-1">📄 Invoices: {formState.invoices.length} saved</div>{financialSummary.totalGST > 0 && (<div className="text-xs text-blue-600">💰 GST Applied: {formatCurrency(financialSummary.totalGST)}</div>)}</div>)}</div></div><div className="space-y-4">{!isReadOnly ? (
               <button onClick={handleSaveClick} disabled={isSaving} className="w-full flex justify-center items-center bg-brand-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-slate-400">{isSaving ? <Spinner size="sm" /> : (docket ? 'Save Changes' : 'Create Docket')}</button>
             ) : (
               <button onClick={onClose} className="w-full flex justify-center items-center bg-slate-200 text-slate-800 font-bold py-3 px-4 rounded-lg">Close</button>

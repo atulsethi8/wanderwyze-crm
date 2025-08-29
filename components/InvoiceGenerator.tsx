@@ -103,6 +103,16 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     }
   }, [customerSearchQuery]);
 
+  // Sync docket invoices when docket changes
+  useEffect(() => {
+    // Reset state when docket changes
+    setCurrentInvoiceId(null);
+    setIsReadOnly(false);
+    setIsEditing(false);
+    setOriginalBilledToDetails(null);
+    setAuditLog([]);
+  }, [docket.id]);
+
   // Initialize line items from docket
   useEffect(() => {
     const initialLineItems: InvoiceLineItem[] = [];
@@ -328,7 +338,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     setTerms(invoice.terms);
     setDueDate(invoice.dueDate);
     setCurrentInvoiceId(invoice.id);
-    setIsReadOnly(true);
+    setIsReadOnly(false); // Allow editing of saved invoices
+    setIsEditing(true); // Mark as editing mode
     setOriginalBilledToDetails(invoice.billedTo);
     
     // Try to find and set the selected customer if it exists in the database
@@ -534,7 +545,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
 
     // Only generate new invoice number if this is the first save (not editing existing)
     let finalInvoiceNumber = invoiceNumber;
-    if (!currentInvoiceId && !isReadOnly) {
+    if (!currentInvoiceId) {
       // This is the first save, generate new invoice number
       const nextInvoiceNum = await getNextInvoiceNumber();
       finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
@@ -560,16 +571,15 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     
     onSaveInvoice(newInvoice);
 
-    // Make form read-only after saving
-    setIsReadOnly(true);
+    // Update state after saving
+    setCurrentInvoiceId(newInvoice.id);
+    setIsReadOnly(false);
+    setIsEditing(true);
     setOriginalBilledToDetails(billedToDetails);
-    if (!currentInvoiceId) {
-      setCurrentInvoiceId(newInvoice.id);
-    }
     const timestamp = new Date().toLocaleString();
-    setAuditLog(prev => [...prev, `${timestamp}: Invoice saved successfully`]);
+    setAuditLog(prev => [...prev, `${timestamp}: Invoice ${currentInvoiceId ? 'updated' : 'saved'} successfully`]);
 
-    alert('Invoice saved successfully!');
+    alert(`Invoice ${currentInvoiceId ? 'updated' : 'saved'} successfully!`);
   };
 
   const handleDownloadPDF = async () => {
@@ -706,7 +716,9 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
             )}
             {!isReadOnly && (
               <div className="flex gap-2">
-                <button onClick={handleSaveInvoice} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">Save Invoice</button>
+                                        <button onClick={handleSaveInvoice} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">
+                            {currentInvoiceId ? 'Update Invoice' : 'Save Invoice'}
+                        </button>
                 <button onClick={handleDownloadPDF} className="bg-brand-primary text-white px-4 py-2 rounded-md text-sm font-semibold">Download PDF</button>
               </div>
             )}
@@ -1087,6 +1099,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                     setIsReadOnly(false);
                                     setIsEditing(false);
                                     setOriginalBilledToDetails(null);
+                                    setSelectedCustomer(null);
+                                    setBilledToPassengerId('');
+                                    setCustomerSearchQuery('');
+                                    setCustomerSearchResults([]);
                                     setAuditLog([]);
                                     const timestamp = new Date().toLocaleString();
                                     setAuditLog([`${timestamp}: Started new invoice`]);
@@ -1103,8 +1119,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                         <button
                                             key={inv.id}
                                             onClick={() => loadInvoice(inv)}
-                                            className={`w-full flex justify-between items-center p-2 bg-white rounded border hover:bg-blue-50 transition-colors ${
-                                                currentInvoiceId === inv.id ? 'border-blue-500 bg-blue-50' : ''
+                                            className={`w-full flex justify-between items-center p-2 rounded border transition-colors ${
+                                                currentInvoiceId === inv.id 
+                                                    ? 'border-blue-500 bg-blue-50' 
+                                                    : 'bg-white border-gray-200 hover:bg-blue-50'
                                             }`}
                                         >
                                             <div className="text-left">
@@ -1113,8 +1131,12 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                                     {formatDate(inv.date)} - {formatCurrency(inv.grandTotal)}
                                                 </div>
                                             </div>
-                                            <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
-                                                {currentInvoiceId === inv.id ? 'Current' : 'Saved'}
+                                            <span className={`px-2 py-1 text-xs rounded ${
+                                                currentInvoiceId === inv.id 
+                                                    ? 'bg-blue-100 text-blue-700' 
+                                                    : 'bg-green-100 text-green-700'
+                                            }`}>
+                                                {currentInvoiceId === inv.id ? 'Editing' : 'Saved'}
                                             </span>
                                         </button>
                                     ))}
