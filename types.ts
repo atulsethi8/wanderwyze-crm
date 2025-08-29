@@ -38,10 +38,60 @@ export enum LeadSource {
     Other = "Other",
 }
 
+export enum LeadStatus {
+    Cold = 'cold',
+    Warm = 'warm',
+    Final = 'final'
+}
+
 export interface Client {
   name: string;
   contactInfo: string;
   leadSource: LeadSource;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  company?: string;
+  source: string;
+  status: LeadStatus;
+  description: string;
+  assignedTo: string;
+  expectedValue: number;
+  createdDate: string;
+  lastContactDate?: string;
+  nextFollowUpDate?: string;
+  notes: string;
+  // Travel details
+  travelDates: {
+    departureDate: string;
+    returnDate: string;
+  };
+  numberOfPax: number;
+  // Day-wise itinerary tracking
+  itinerary: {
+    day1?: string;
+    day2?: string;
+    day3?: string;
+    day4?: string;
+    day5?: string;
+    day6?: string;
+    day7?: string;
+    day8?: string;
+    day9?: string;
+    day10?: string;
+  };
+  // Quotation details with separate fields
+  quotation: {
+    flights: number;
+    hotels: number;
+    excursions: number;
+    transfers: number;
+    total: number;
+  };
 }
 
 export interface Passenger {

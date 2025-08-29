@@ -15,6 +15,7 @@ import { AgentManagementPage } from './components/AgentManagementPage';
 import { UserManagementPage } from './components/UserManagementPage';
 import { ChangePasswordPage } from './components/ChangePasswordPage';
 import CustomerManagementPage from './components/CustomerManagementPage';
+import { LeadsPipeline } from './components/LeadsPipeline';
 import { usingDefaultKeys } from './services';
 
 /**
@@ -192,6 +193,12 @@ const AppContent: React.FC = () => {
                  return currentUser.role === 'admin' ? <DeletedDocketsLog logs={deletionLog} /> : <p>Access Denied</p>;
             case 'customers':
                 return <CustomerManagementPage />;
+            case 'leads':
+                return <LeadsPipeline onConvertToDocket={(lead) => {
+                    // TODO: Implement lead to docket conversion
+                    console.log('Converting lead to docket:', lead);
+                    handleNavigation('form');
+                }} />;
             default:
                 return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} searchTerm={searchTerm} />;
         }

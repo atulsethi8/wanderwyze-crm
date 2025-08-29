@@ -17,17 +17,26 @@ const DocketCard: React.FC<DocketCardProps> = ({ docket, agentName, onClick }) =
     const statusStyle = STATUS_COLORS[status];
 
     const financialSummary = useMemo(() => {
-        const grossBilled = [
-            ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
-            ...itinerary.hotels.map(h => h.grossBilled),
-            ...itinerary.excursions.map(a => a.grossBilled),
-            ...itinerary.transfers.map(t => t.grossBilled),
-        ].reduce((sum, current) => sum + current, 0);
+        // Calculate total billed amount including GST from invoices
+        let totalBilled = 0;
+        
+        if (docket.invoices && docket.invoices.length > 0) {
+            // If invoices exist, use the grand total from invoices (includes GST)
+            totalBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+        } else {
+            // Fallback to itinerary gross billed if no invoices
+            totalBilled = [
+                ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
+                ...itinerary.hotels.map(h => h.grossBilled),
+                ...itinerary.excursions.map(a => a.grossBilled),
+                ...itinerary.transfers.map(t => t.grossBilled),
+            ].reduce((sum, current) => sum + current, 0);
+        }
 
         const totalPaid = docket.payments.reduce((sum, p) => sum + p.amount, 0);
-        const balanceDue = grossBilled - totalPaid;
+        const balanceDue = totalBilled - totalPaid;
 
-        return { grossBilled, balanceDue };
+        return { grossBilled: totalBilled, balanceDue };
     }, [docket]);
 
     const mainDestination = itinerary.flights[0]?.arrivalAirport || itinerary.hotels[0]?.name || 'N/A';
@@ -98,13 +107,23 @@ const OutstandingBalances: React.FC<{ dockets: Docket[]; onSelectDocket: (id: st
 
     return dockets
       .map(docket => {
-        const { itinerary, payments, client, id, status, passengers } = docket;
-        const grossBilled = [
-          ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
-          ...itinerary.hotels.map(h => h.grossBilled),
-          ...itinerary.excursions.map(a => a.grossBilled),
-          ...itinerary.transfers.map(t => t.grossBilled),
-        ].reduce((sum, current) => sum + (current || 0), 0);
+        const { itinerary, payments, client, id, status, passengers, invoices } = docket;
+        
+        // Calculate total billed amount including GST from invoices
+        let grossBilled = 0;
+        
+        if (invoices && invoices.length > 0) {
+            // If invoices exist, use the grand total from invoices (includes GST)
+            grossBilled = invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+        } else {
+            // Fallback to itinerary gross billed if no invoices
+            grossBilled = [
+              ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
+              ...itinerary.hotels.map(h => h.grossBilled),
+              ...itinerary.excursions.map(a => a.grossBilled),
+              ...itinerary.transfers.map(t => t.grossBilled),
+            ].reduce((sum, current) => sum + (current || 0), 0);
+        }
 
         const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const balanceDue = grossBilled - totalPaid;

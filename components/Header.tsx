@@ -78,6 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                     {/* Desktop Navigation */}
                     <nav className="hidden md:flex items-center space-x-4">
                         <button onClick={() => onNavigate('dashboard')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Dashboard</button>
+                        <button onClick={() => onNavigate('leads')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Leads</button>
                         <button onClick={() => onNavigate('calendar')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">PAX Calendar</button>
                         <button onClick={() => onNavigate('reports')} className="px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Reports</button>
                         {currentUser?.role === 'admin' && (
@@ -180,6 +181,7 @@ export const Header: React.FC<HeaderProps> = ({ onNewDocket, onNavigate, current
                     <div className="md:hidden pb-4 border-t border-border">
                         <div className="pt-4 space-y-2">
                             <button onClick={() => handleMobileNavigation('dashboard')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Dashboard</button>
+                            <button onClick={() => handleMobileNavigation('leads')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Leads</button>
                             <button onClick={() => handleMobileNavigation('calendar')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">PAX Calendar</button>
                             <button onClick={() => handleMobileNavigation('reports')} className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-muted">Reports</button>
                             {currentUser?.role === 'admin' && (

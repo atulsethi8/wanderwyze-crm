@@ -14,6 +14,25 @@ interface ReportsDashboardProps {
 }
 
 const calculateDocketTotals = (docket: Docket) => {
+    // Calculate total billed amount including GST from invoices
+    let grossBilled = 0;
+    
+    if (docket.invoices && docket.invoices.length > 0) {
+        // If invoices exist, use the grand total from invoices (includes GST)
+        grossBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+    } else {
+        // Fallback to itinerary gross billed if no invoices
+        const allPayableItems = [
+            ...docket.itinerary.flights.flatMap(f => f.passengerDetails),
+            ...docket.itinerary.hotels,
+            ...docket.itinerary.excursions,
+            ...docket.itinerary.transfers,
+        ];
+
+        grossBilled = allPayableItems.reduce((acc, item) => acc + (item.grossBilled || 0), 0);
+    }
+
+    // Calculate net cost from itinerary items
     const allPayableItems = [
         ...docket.itinerary.flights.flatMap(f => f.passengerDetails),
         ...docket.itinerary.hotels,
@@ -21,10 +40,9 @@ const calculateDocketTotals = (docket: Docket) => {
         ...docket.itinerary.transfers,
     ];
 
-    return allPayableItems.reduce((acc, item) => ({
-        grossBilled: acc.grossBilled + (item.grossBilled || 0),
-        netCost: acc.netCost + (item.netCost || 0)
-    }), { grossBilled: 0, netCost: 0 });
+    const netCost = allPayableItems.reduce((acc, item) => acc + (item.netCost || 0), 0);
+
+    return { grossBilled, netCost };
 };
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents, onOpenDocket }) => {
