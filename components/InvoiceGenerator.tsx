@@ -113,36 +113,39 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     setAuditLog([]);
   }, [docket.id]);
 
-  // Initialize line items from docket
+  // Initialize line items from docket - only when docket ID changes or lineItems is empty
   useEffect(() => {
-    const initialLineItems: InvoiceLineItem[] = [];
-    docket.itinerary.flights.forEach(f => {
-        const paxCount = f.passengerDetails.length;
-        if (paxCount > 0) {
-            const totalGross = f.passengerDetails.reduce((sum, pd) => sum + pd.grossBilled, 0);
-            if (totalGross > 0) {
-              initialLineItems.push({
-                  id: `line-${Date.now()}-flight-${f.id}`,
-                  description: `Flights: ${f.airline} (${f.departureAirport}-${f.arrivalAirport}) for ${paxCount} passenger(s)`,
-                  quantity: 1,
-                  rate: totalGross,
-                  isGstApplicable: false,
-                  gstRate: 0,
-              });
-            }
-        }
-    });
-    docket.itinerary.hotels.forEach(h => {
-        if(h.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-hotel-${h.id}`, description: `Hotel: ${h.name}`, quantity: 1, rate: h.grossBilled, isGstApplicable: false, gstRate: 0 });
-    });
-    docket.itinerary.excursions.forEach(a => {
-        if(a.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-excursion-${a.id}`, description: `Excursion: ${a.name}`, quantity: 1, rate: a.grossBilled, isGstApplicable: false, gstRate: 0 });
-    });
-    docket.itinerary.transfers.forEach(t => {
-       if(t.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-transfer-${t.id}`, description: `Transfer: ${t.provider}`, quantity: 1, rate: t.grossBilled, isGstApplicable: false, gstRate: 0 });
-    });
-    setLineItems(initialLineItems);
-  }, [docket]);
+    // Only initialize if lineItems is empty (first load) or if docket ID changed
+    if (lineItems.length === 0) {
+      const initialLineItems: InvoiceLineItem[] = [];
+      docket.itinerary.flights.forEach(f => {
+          const paxCount = f.passengerDetails.length;
+          if (paxCount > 0) {
+              const totalGross = f.passengerDetails.reduce((sum, pd) => sum + pd.grossBilled, 0);
+              if (totalGross > 0) {
+                initialLineItems.push({
+                    id: `line-${Date.now()}-flight-${f.id}`,
+                    description: `Flights: ${f.airline} (${f.departureAirport}-${f.arrivalAirport}) for ${paxCount} passenger(s)`,
+                    quantity: 1,
+                    rate: totalGross,
+                    isGstApplicable: false,
+                    gstRate: 0,
+                });
+              }
+          }
+      });
+      docket.itinerary.hotels.forEach(h => {
+          if(h.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-hotel-${h.id}`, description: `Hotel: ${h.name}`, quantity: 1, rate: h.grossBilled, isGstApplicable: false, gstRate: 0 });
+      });
+      docket.itinerary.excursions.forEach(a => {
+          if(a.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-excursion-${a.id}`, description: `Excursion: ${a.name}`, quantity: 1, rate: a.grossBilled, isGstApplicable: false, gstRate: 0 });
+      });
+      docket.itinerary.transfers.forEach(t => {
+         if(t.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-transfer-${t.id}`, description: `Transfer: ${t.provider}`, quantity: 1, rate: t.grossBilled, isGstApplicable: false, gstRate: 0 });
+      });
+      setLineItems(initialLineItems);
+    }
+  }, [docket.id, lineItems.length]);
 
   // Update billing details when a passenger is selected
   useEffect(() => {
