@@ -1,0 +1,3 @@
+[33mafc5250[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix: Prevent hotel data loss when toggling between tabs in itinerary section - Changed useEffect dependency from [docket] to [docket?.id] to only reset form state when docket ID changes, not on every re-render
+[33m8bc63ae[m STABLE CHECKPOINT v3.0: Complete GST Integration & Leads Pipeline
+[33mdd753b8[m docs: Add STABLE_CHECKPOINT_v2.0 documentation

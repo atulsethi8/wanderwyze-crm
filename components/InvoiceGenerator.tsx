@@ -51,6 +51,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
   const [notes, setNotes] = useState("Thank you for your business. All payments are non-refundable.");
   const [gstType, setGstType] = useState<'IGST' | 'CGST/SGST'>('IGST');
+  const [gstOnTotal, setGstOnTotal] = useState(false);
+  const [gstOnTotalRate, setGstOnTotalRate] = useState(18);
   const [terms, setTerms] = useState('Due on Receipt');
   const [dueDate, setDueDate] = useState('');
   const [currentInvoiceId, setCurrentInvoiceId] = useState<string | null>(null);
@@ -291,29 +293,40 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   
   const financialTotals = useMemo(() => {
     const subtotal = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0), 0);
-    const gstAmount = lineItems.reduce((sum, item) => {
-        if (item.isGstApplicable && item.rate && item.gstRate) {
-            return sum + ((item.quantity * item.rate) * (item.gstRate / 100));
-        }
-        return sum;
-    }, 0);
-    const grandTotal = subtotal + gstAmount;
     
+    let gstAmount = 0;
     const gstBreakdown: {[rate: string]: { taxableAmount: number, gstValue: number }} = {};
-    lineItems.forEach(item => {
-        if(item.isGstApplicable && item.gstRate > 0) {
-            const taxableAmount = item.quantity * item.rate;
-            const itemGst = taxableAmount * (item.gstRate / 100);
-            if (!gstBreakdown[item.gstRate]) {
-                gstBreakdown[item.gstRate] = { taxableAmount: 0, gstValue: 0 };
-            }
-            gstBreakdown[item.gstRate].taxableAmount += taxableAmount;
-            gstBreakdown[item.gstRate].gstValue += itemGst;
-        }
-    });
+    
+    if (gstOnTotal) {
+      // Apply GST on total amount
+      gstAmount = subtotal * (gstOnTotalRate / 100);
+      gstBreakdown[gstOnTotalRate] = { taxableAmount: subtotal, gstValue: gstAmount };
+    } else {
+      // Apply GST on individual items
+      gstAmount = lineItems.reduce((sum, item) => {
+          if (item.isGstApplicable && item.rate && item.gstRate) {
+              return sum + ((item.quantity * item.rate) * (item.gstRate / 100));
+          }
+          return sum;
+      }, 0);
+      
+      lineItems.forEach(item => {
+          if(item.isGstApplicable && item.gstRate > 0) {
+              const taxableAmount = item.quantity * item.rate;
+              const itemGst = taxableAmount * (item.gstRate / 100);
+              if (!gstBreakdown[item.gstRate]) {
+                  gstBreakdown[item.gstRate] = { taxableAmount: 0, gstValue: 0 };
+              }
+              gstBreakdown[item.gstRate].taxableAmount += taxableAmount;
+              gstBreakdown[item.gstRate].gstValue += itemGst;
+          }
+      });
+    }
+    
+    const grandTotal = subtotal + gstAmount;
 
     return { subtotal, gstAmount, grandTotal, gstBreakdown: Object.entries(gstBreakdown) };
-  }, [lineItems]);
+  }, [lineItems, gstOnTotal, gstOnTotalRate, gstType]);
 
   // Compute effective GST rate across all GST-applicable items
   const gstTaxableBase = useMemo(() => {
@@ -338,6 +351,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     setLineItems(invoice.lineItems);
     setNotes(invoice.notes);
     setGstType(invoice.gstType);
+    setGstOnTotal(invoice.gstOnTotal || false);
+    setGstOnTotalRate(invoice.gstOnTotalRate || 18);
     setTerms(invoice.terms);
     setDueDate(invoice.dueDate);
     setCurrentInvoiceId(invoice.id);
@@ -567,6 +582,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       gstAmount: financialTotals.gstAmount,
       grandTotal: financialTotals.grandTotal,
       gstType,
+      gstOnTotal,
+      gstOnTotalRate,
       companySettings: { ...settings },
       terms,
       dueDate
@@ -696,10 +713,22 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
       setLineItems(prev => prev.filter(item => item.id !== id));
   };
   
-  // Helpers for line totals
-  const lineNet = (item: InvoiceLineItem) => (Number(item.quantity) || 0) * (Number(item.rate) || 0);
-  const lineTax = (item: InvoiceLineItem) => item.isGstApplicable && item.gstRate ? lineNet(item) * (item.gstRate / 100) : 0;
-  const lineGross = (item: InvoiceLineItem) => lineNet(item) + lineTax(item);
+     // Helpers for line totals
+   const lineNet = (item: InvoiceLineItem) => (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+   const lineTax = (item: InvoiceLineItem) => {
+     if (gstOnTotal) {
+       // When GST is applied on total, individual items don't show tax
+       return 0;
+     }
+     return item.isGstApplicable && item.gstRate ? lineNet(item) * (item.gstRate / 100) : 0;
+   };
+   const lineGross = (item: InvoiceLineItem) => {
+     if (gstOnTotal) {
+       // When GST is applied on total, line total is same as net (no individual tax)
+       return lineNet(item);
+     }
+     return lineNet(item) + lineTax(item);
+   };
 
   return (
     <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4">
@@ -988,6 +1017,31 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                 <option value="IGST">IGST (Interstate)</option>
                                 <option value="CGST/SGST">CGST/SGST (Intrastate)</option>
                             </FormSelect>
+                            
+                            {/* GST on Total Option */}
+                            <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="gst-on-total"
+                                        checked={gstOnTotal} 
+                                        onChange={e => setGstOnTotal(e.target.checked)}
+                                        className="rounded"
+                                        disabled={isReadOnly && !isEditing}
+                                    />
+                                    <label htmlFor="gst-on-total" className="text-sm font-medium text-gray-700">Apply GST on Total Amount</label>
+                                </div>
+                                {gstOnTotal && (
+                                    <FormSelect 
+                                        label="GST Rate on Total" 
+                                        value={gstOnTotalRate} 
+                                        onChange={e => setGstOnTotalRate(parseInt(e.target.value) || 18)}
+                                        disabled={isReadOnly && !isEditing}
+                                    >
+                                        {GST_RATES.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+                                    </FormSelect>
+                                )}
+                            </div>
                         </div>
                     </div>
                     
@@ -1046,25 +1100,33 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                                                 checked={item.isGstApplicable} 
                                                 onChange={e => handleLineItemChange(item.id, 'isGstApplicable', e.target.checked)}
                                                 className="rounded"
+                                                disabled={gstOnTotal || (isReadOnly && !isEditing)}
                                             />
-                                            <label htmlFor={`gst-${item.id}`} className="text-sm text-gray-700">GST Applicable</label>
+                                            <label htmlFor={`gst-${item.id}`} className={`text-sm ${gstOnTotal ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                GST Applicable {gstOnTotal && '(Disabled - GST on Total)'}
+                                            </label>
                                         </div>
-                                        {item.isGstApplicable && (
+                                        {item.isGstApplicable && !gstOnTotal && (
                                             <FormSelect 
                                                 label="GST Rate" 
                                                 value={item.gstRate} 
                                                 onChange={e => handleLineItemChange(item.id, 'gstRate', parseInt(e.target.value) || 0)}
+                                                disabled={isReadOnly && !isEditing}
                                             >
                                                 {GST_RATES.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
                                             </FormSelect>
                                         )}
                                     </div>
                                     
-                                    <div className="mt-3 text-sm text-gray-600">
-                                        Net: ₹{formatCurrency(lineNet(item))} | 
-                                        Tax: ₹{formatCurrency(lineTax(item))} | 
-                                        Total: ₹{formatCurrency(lineGross(item))}
-                                    </div>
+                                                                         <div className="mt-3 text-sm text-gray-600">
+                                         Net: {formatCurrency(lineNet(item))} | 
+                                         {gstOnTotal ? (
+                                             <span className="text-gray-400">Tax: Included in Total GST</span>
+                                         ) : (
+                                             <>Tax: {formatCurrency(lineTax(item))} | </>
+                                         )}
+                                         Total: {formatCurrency(lineGross(item))}
+                                     </div>
                                 </div>
                             ))}
                         </div>
@@ -1224,22 +1286,22 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                         <th className="text-right py-2 font-semibold text-slate-700">QTY</th>
                         <th className="text-right py-2 font-semibold text-slate-700">UNIT PRICE</th>
                         <th className="text-right py-2 font-semibold text-slate-700">NET COST</th>
-                        <th className="text-right py-2 font-semibold text-slate-700">TAX %</th>
+                        {!gstOnTotal && <th className="text-right py-2 font-semibold text-slate-700">TAX %</th>}
                         <th className="text-right py-2 font-semibold text-slate-700">GROSS COST</th>
                         <th className="text-right py-2 font-semibold text-slate-700">TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
                     {lineItems.map((item, index) => (
-                        <tr key={item.id} className="border-b border-slate-100">
-                            <td className="py-3 text-slate-800">{item.description}</td>
-                            <td className="py-3 text-right text-slate-600">{item.quantity}</td>
-                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(item.rate)}</td>
-                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(lineNet(item))}</td>
-                            <td className="py-3 text-right text-slate-600">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>
-                            <td className="py-3 text-right text-slate-600">₹{formatCurrency(lineNet(item))}</td>
-                            <td className="py-3 text-right font-semibold text-slate-800">₹{formatCurrency(lineGross(item))}</td>
-                        </tr>
+                                                 <tr key={item.id} className="border-b border-slate-100">
+                             <td className="py-3 text-slate-800">{item.description}</td>
+                             <td className="py-3 text-right text-slate-600">{item.quantity}</td>
+                             <td className="py-3 text-right text-slate-600">{formatCurrency(item.rate)}</td>
+                             <td className="py-3 text-right text-slate-600">{formatCurrency(lineNet(item))}</td>
+                             {!gstOnTotal && <td className="py-3 text-right text-slate-600">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>}
+                             <td className="py-3 text-right text-slate-600">{formatCurrency(lineNet(item))}</td>
+                             <td className="py-3 text-right font-semibold text-slate-800">{formatCurrency(lineGross(item))}</td>
+                         </tr>
                     ))}
                 </tbody>
               </table>
@@ -1247,20 +1309,35 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
               {/* Totals */}
               <div className="flex justify-end mb-8">
                 <div className="w-64 text-sm">
-                    <div className="flex justify-between py-1">
-                        <span className="text-slate-600">Subtotal:</span>
-                        <span className="text-slate-800">₹{formatCurrency(financialTotals.subtotal)}</span>
-                    </div>
+                                         <div className="flex justify-between py-1">
+                         <span className="text-slate-600">Subtotal:</span>
+                         <span className="text-slate-800">{formatCurrency(financialTotals.subtotal)}</span>
+                     </div>
                     {financialTotals.gstAmount > 0 && (
-                        <div className="flex justify-between py-1">
-                            <span className="text-slate-600">GST ({formatPercent(effectiveGstRate)}):</span>
-                            <span className="text-slate-800">₹{formatCurrency(financialTotals.gstAmount)}</span>
-                        </div>
+                        <>
+                            {gstType === 'CGST/SGST' ? (
+                                <>
+                                                                         <div className="flex justify-between py-1">
+                                         <span className="text-slate-600">CGST ({formatPercent(effectiveGstRate / 2)}):</span>
+                                         <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount / 2)}</span>
+                                     </div>
+                                     <div className="flex justify-between py-1">
+                                         <span className="text-slate-600">SGST ({formatPercent(effectiveGstRate / 2)}):</span>
+                                         <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount / 2)}</span>
+                                     </div>
+                                </>
+                            ) : (
+                                                                 <div className="flex justify-between py-1">
+                                     <span className="text-slate-600">IGST ({formatPercent(effectiveGstRate)}):</span>
+                                     <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount)}</span>
+                                 </div>
+                            )}
+                        </>
                     )}
-                    <div className="flex justify-between py-2 border-t-2 border-slate-200 font-bold text-lg">
-                        <span className="text-slate-800">Grand Total:</span>
-                        <span className="text-slate-900">₹{formatCurrency(financialTotals.grandTotal)}</span>
-                    </div>
+                                         <div className="flex justify-between py-2 border-t-2 border-slate-200 font-bold text-lg">
+                         <span className="text-slate-800">Grand Total:</span>
+                         <span className="text-slate-900">{formatCurrency(financialTotals.grandTotal)}</span>
+                     </div>
                     <div className="text-xs text-slate-500 mt-1">
                         Amount in words: {amountToWords(financialTotals.grandTotal)}
                     </div>
