@@ -753,9 +753,10 @@ export const LeadsPipeline: React.FC<LeadsPipelineProps> = ({ onConvertToDocket 
     try {
       const createdLead = await leadService.createLead(newLead);
       setLeads(prev => [createdLead, ...prev]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating lead:', err);
-      alert('Failed to create lead. Please try again.');
+      const msg = err?.message || err?.error_description || err?.toString?.() || 'Failed to create lead. Please try again.';
+      alert(msg);
     }
   };
 

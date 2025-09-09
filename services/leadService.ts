@@ -95,7 +95,13 @@ const transformDatabaseLeadToLead = (dbLead: DatabaseLead, itinerary: DatabaseIt
 // Transform frontend lead to database format
 const transformLeadToDatabaseFormat = (lead: Omit<Lead, 'id'>) => {
   const { itinerary, quotation, ...leadData } = lead;
-  
+
+  const normalizeDate = (value?: string) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  };
+
   return {
     name: leadData.name,
     email: leadData.email,
@@ -106,9 +112,9 @@ const transformLeadToDatabaseFormat = (lead: Omit<Lead, 'id'>) => {
     description: leadData.description,
     assigned_to: leadData.assignedTo,
     expected_value: leadData.expectedValue,
-    created_date: leadData.createdDate,
-    last_contact_date: leadData.lastContactDate,
-    next_follow_up_date: leadData.nextFollowUpDate,
+    created_date: normalizeDate(leadData.createdDate) || new Date().toISOString().split('T')[0],
+    last_contact_date: normalizeDate(leadData.lastContactDate),
+    next_follow_up_date: normalizeDate(leadData.nextFollowUpDate),
     notes: leadData.notes,
     travel_dates: leadData.travelDates,
     number_of_pax: leadData.numberOfPax,

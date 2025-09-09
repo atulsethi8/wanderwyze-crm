@@ -180,6 +180,11 @@ export interface Itinerary {
   hotels: Hotel[];
   excursions: Excursion[];
   transfers: Transfer[];
+  // New: optional single service charge totals for the itinerary
+  serviceCharge?: {
+    netCost: number;
+    grossBilled: number;
+  };
 }
 
 export interface Payment {

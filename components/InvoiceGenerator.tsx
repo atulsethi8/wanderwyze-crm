@@ -141,6 +141,17 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     docket.itinerary.transfers.forEach(t => {
        if(t.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-transfer-${t.id}`, description: `Transfer: ${t.provider}`, quantity: 1, rate: t.grossBilled, isGstApplicable: false, gstRate: 0 });
     });
+    // Add Service Charge from itinerary if present
+    if (docket.itinerary.serviceCharge && (docket.itinerary.serviceCharge.grossBilled || 0) > 0) {
+        initialLineItems.push({
+            id: `line-${Date.now()}-service-charge`,
+            description: 'Service Charge',
+            quantity: 1,
+            rate: docket.itinerary.serviceCharge.grossBilled || 0,
+            isGstApplicable: false,
+            gstRate: 0,
+        });
+    }
     setLineItems(initialLineItems);
   }, [docket]);
 

@@ -10,7 +10,7 @@ export const STATUS_COLORS: Record<BookingStatus, { bg: string; text: string; bo
 export const LEAD_SOURCES: LeadSource[] = Object.values(LeadSource);
 
 export const INITIAL_CLIENT: Client = { name: '', contactInfo: '', leadSource: LeadSource.WalkIn };
-export const INITIAL_ITINERARY: Itinerary = { flights: [], hotels: [], excursions: [], transfers: [] };
+export const INITIAL_ITINERARY: Itinerary = { flights: [], hotels: [], excursions: [], transfers: [], serviceCharge: { netCost: 0, grossBilled: 0 } };
 export const INITIAL_DOCKET_FORM_STATE: Omit<Docket, 'id' | 'searchTags' | 'createdAt' | 'updatedAt'> = {
     client: INITIAL_CLIENT,
     status: BookingStatus.InProgress,
