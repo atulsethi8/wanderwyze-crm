@@ -198,7 +198,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({ docket, onSave, onDelete
         } else {
             setFormState(INITIAL_DOCKET_FORM_STATE);
         }
-    }, [docket]);
+    }, [docket?.id]); // Only re-initialize when the docket ID changes, not on every re-render
 
     useEffect(() => {
         return () => {

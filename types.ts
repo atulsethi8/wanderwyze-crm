@@ -242,6 +242,8 @@ export interface Invoice {
   gstAmount: number;
   grandTotal: number;
   gstType: 'IGST' | 'CGST/SGST';
+  gstOnTotal?: boolean;
+  gstOnTotalRate?: number;
   companySettings: CompanySettings; // snapshot of settings at time of creation
   terms: string;
   dueDate: string;

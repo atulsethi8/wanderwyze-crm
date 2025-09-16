@@ -16,10 +16,13 @@ interface ReportsDashboardProps {
 const calculateDocketTotals = (docket: Docket) => {
     // Calculate total billed amount including GST from invoices
     let grossBilled = 0;
+    let netBilled = 0; // Net amount before GST
     
     if (docket.invoices && docket.invoices.length > 0) {
         // If invoices exist, use the grand total from invoices (includes GST)
         grossBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+        // Calculate net billed from invoices (before GST) - use subtotal directly
+        netBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.subtotal, 0);
     } else {
         // Fallback to itinerary gross billed if no invoices
         const allPayableItems = [
@@ -28,8 +31,8 @@ const calculateDocketTotals = (docket: Docket) => {
             ...docket.itinerary.excursions,
             ...docket.itinerary.transfers,
         ];
-
         grossBilled = allPayableItems.reduce((acc, item) => acc + (item.grossBilled || 0), 0);
+        netBilled = grossBilled; // No GST in itinerary items
     }
 
     // Calculate net cost from itinerary items
@@ -39,10 +42,9 @@ const calculateDocketTotals = (docket: Docket) => {
         ...docket.itinerary.excursions,
         ...docket.itinerary.transfers,
     ];
-
     const netCost = allPayableItems.reduce((acc, item) => acc + (item.netCost || 0), 0);
 
-    return { grossBilled, netCost };
+    return { grossBilled, netBilled, netCost };
 };
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents, onOpenDocket }) => {
@@ -119,10 +121,10 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
 
     filteredDockets.forEach(docket => {
         const agentId = docket.agentId || 'unassigned';
-        const { grossBilled, netCost } = calculateDocketTotals(docket);
+        const { grossBilled, netBilled, netCost } = calculateDocketTotals(docket);
         if (data[agentId]) {
             data[agentId].sales += grossBilled;
-            data[agentId].profit += (grossBilled - netCost);
+            data[agentId].profit += (netBilled - netCost);
             data[agentId].bookings += 1;
         }
     });
@@ -180,9 +182,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     ];
 
     const rows = docketsByAgentDest.map(d => {
-      const { grossBilled, netCost } = calculateDocketTotals(d);
+      const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
       const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-      const profit = (grossBilled - netCost);
+      const profit = (netBilled - netCost);
       const balance = Math.max(0, grossBilled - paid);
       const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
       const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
@@ -205,9 +207,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
 
     // Add totals row
     const totals = docketsByAgentDest.reduce((acc, d) => {
-      const { grossBilled, netCost } = calculateDocketTotals(d);
+      const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
       const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-      const profit = (grossBilled - netCost);
+      const profit = (netBilled - netCost);
       const balance = Math.max(0, grossBilled - paid);
       
       return {
@@ -428,9 +430,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                 {(() => {
                   let sumBilled = 0; let sumPaid = 0; let sumBalance = 0; let sumProfit = 0;
                   const rows = docketsByAgentDest.map(d => {
-                    const { grossBilled, netCost } = calculateDocketTotals(d);
+                    const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
                     const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-                    const profit = (grossBilled - netCost);
+                    const profit = (netBilled - netCost);
                     const balance = Math.max(0, grossBilled - paid);
                     sumBilled += grossBilled; sumPaid += paid; sumBalance += balance;
                     sumProfit += profit;
