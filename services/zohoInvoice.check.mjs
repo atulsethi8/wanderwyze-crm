@@ -4,7 +4,8 @@
 //   node services/zohoInvoice.check.build.mjs
 import {
   buildZohoInvoice,
-  availableGstModes,
+  gstModeWarning,
+  GST_MODES,
   toStateCode,
   isB2B,
   WANDERWYZE_TAXES as T,
@@ -55,12 +56,26 @@ check('registered business is B2B', isB2B('business_gst'), true);
 check('composition dealer is B2B', isB2B('business_registered_composition'), true);
 check('consumer is not B2B', isB2B('consumer'), false);
 check('unset is not B2B', isB2B(undefined), false);
-check('B2B may use 5% package', availableGstModes('business_gst'), [
+// Every mode is always offered - the agent chooses the treatment per invoice.
+check('all modes offered regardless of customer', GST_MODES, [
   'service_charge_18',
   'package_5',
   'none',
 ]);
-check('B2C may not use 5% package', availableGstModes('consumer'), ['service_charge_18', 'none']);
+check('no warning for 5% on a registered business', gstModeWarning('package_5', 'business_gst'), null);
+check('no warning for 5% on a composition dealer', gstModeWarning('package_5', 'business_registered_composition'), null);
+check(
+  'warns when 5% picked for a consumer',
+  (gstModeWarning('package_5', 'consumer') || '').includes('not a registered business'),
+  true,
+);
+check(
+  'warns when 5% picked and treatment unset',
+  (gstModeWarning('package_5', undefined) || '').includes('no GST treatment set'),
+  true,
+);
+check('no warning on service-charge mode', gstModeWarning('service_charge_18', 'consumer'), null);
+check('no warning on no-GST mode', gstModeWarning('none', undefined), null);
 
 // --- service-charge mode, reproducing INV-000137 --------------------------
 // Real invoice: place of supply TS, travel 269,420 untaxed, SERVICE CHARGE 1,000 at IGST18.
@@ -114,32 +129,25 @@ check('every travel line taxed at 5%', pkg.line_items.map((l) => l.tax_id), [
 ]);
 check('no service charge line added', pkg.line_items.length, 2);
 
-// The rule that matters: 5% is not available to a consumer.
-throws(
-  'package 5% rejected for a consumer',
-  () =>
-    buildZohoInvoice({
-      customerId: 'C',
-      date: '2026-04-06',
-      placeOfSupply: 'Haryana',
-      lineItems: [line('Flights', 100000)],
-      gstMode: 'package_5',
-      gstTreatment: 'consumer',
-    }),
-  'registered business',
-);
-throws(
-  'package 5% rejected when treatment unknown',
-  () =>
-    buildZohoInvoice({
-      customerId: 'C',
-      date: '2026-04-06',
-      placeOfSupply: 'Haryana',
-      lineItems: [line('Flights', 100000)],
-      gstMode: 'package_5',
-    }),
-  'registered business',
-);
+// 5% for a consumer is allowed and merely flagged: many Zoho contacts have no treatment
+// set, so refusing the selection would block legitimate invoices.
+const consumerAt5 = buildZohoInvoice({
+  customerId: 'C',
+  date: '2026-04-06',
+  placeOfSupply: 'Haryana',
+  lineItems: [line('Flights', 100000)],
+  gstMode: 'package_5',
+  gstTreatment: 'consumer',
+});
+check('5% for a consumer still builds', consumerAt5.line_items[0].tax_id, T.inter.five);
+const unsetAt5 = buildZohoInvoice({
+  customerId: 'C',
+  date: '2026-04-06',
+  placeOfSupply: 'Haryana',
+  lineItems: [line('Flights', 100000)],
+  gstMode: 'package_5',
+});
+check('5% with treatment unset still builds', unsetAt5.line_items[0].tax_id, T.inter.five);
 
 // --- no-GST mode, as INV-000136 -------------------------------------------
 console.log('\n--- no GST ---');

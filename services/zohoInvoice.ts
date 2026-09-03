@@ -112,13 +112,32 @@ const B2B_TREATMENTS = ['business_gst', 'business_registered_composition', 'busi
 export const isB2B = (gstTreatment?: string) => B2B_TREATMENTS.includes(gstTreatment || '');
 
 /**
- * Which GST modes the caller may offer for this customer. Charging 5% on the package to a
- * consumer is not permitted, so the UI must not present it.
+ * Every mode is always offered: the GST treatment is the agent's decision at invoice time,
+ * not something to be inferred from the record.
  */
-export const availableGstModes = (gstTreatment?: string): GstMode[] =>
-  isB2B(gstTreatment)
-    ? ['service_charge_18', 'package_5', 'none']
-    : ['service_charge_18', 'none'];
+export const GST_MODES: GstMode[] = ['service_charge_18', 'package_5', 'none'];
+
+export const GST_MODE_LABELS: Record<GstMode, string> = {
+  service_charge_18: 'Service charge — 18% GST on the fee only',
+  package_5: 'Package — 5% GST on the total',
+  none: 'No GST',
+};
+
+/**
+ * A caution shown beside the choice, never a block.
+ *
+ * The 5% package rate applies to a registered business, but Zoho contacts frequently have
+ * gst_treatment unset, so absence is not evidence of a consumer. Refusing the selection
+ * outright would obstruct legitimate invoices; the agent is told and decides.
+ */
+export const gstModeWarning = (mode: GstMode, gstTreatment?: string): string | null => {
+  if (mode !== 'package_5') return null;
+  if (isB2B(gstTreatment)) return null;
+  if (!gstTreatment) {
+    return 'This customer has no GST treatment set in Zoho. The 5% package rate applies to registered businesses — check before sending.';
+  }
+  return `This customer is "${gstTreatment}" in Zoho, not a registered business. The 5% package rate normally applies only to B2B customers.`;
+};
 
 export interface ZohoLineItem {
   name: string;
@@ -177,11 +196,8 @@ export const buildZohoInvoice = (input: BuildInvoiceInput): ZohoInvoicePayload =
     throw new ZohoMappingError('A Zoho customer must be matched before the invoice can be created.');
   }
 
-  if (input.gstMode === 'package_5' && !isB2B(input.gstTreatment)) {
-    throw new ZohoMappingError(
-      'A 5% package rate applies only to a registered business. This customer is not B2B in Zoho, so charge a service fee at 18% instead.',
-    );
-  }
+  // No check on the GST mode against the customer type: the treatment is chosen per invoice
+  // by the agent. gstModeWarning surfaces the B2B caveat in the UI without blocking.
 
   // Intra-state supply splits into CGST + SGST via a tax group; inter-state uses one IGST tax.
   const intraState = placeOfSupply === taxes.homeStateCode;
