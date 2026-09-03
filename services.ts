@@ -1,7 +1,4 @@
 
-// This file no longer needs the vite client reference.
-// It caused confusion as the environment doesn't seem to be a standard Vite setup.
-
 import { createClient, type User } from "@supabase/supabase-js";
 import { AuthUser } from "./types";
 import { Database } from './database.types';
@@ -13,16 +10,17 @@ import { Database } from './database.types';
 // This application is configured to use environment variables for API keys.
 // These are expected to be injected by the build/deployment environment.
 //
-// For Supabase: process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY
-// For Gemini: process.env.API_KEY
+// For Supabase: import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY
 //
 // ===================================================================================
 
-// IMPORTANT: Use direct references to process.env.* so Vite can statically replace
-// these at build time.
-const supabaseUrl = process.env.VITE_SUPABASE_URL as unknown as string | undefined;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY as unknown as string | undefined;
-// This flag checks if ALL required keys have been configured.
+// IMPORTANT: read these through import.meta.env, not process.env. Vite exposes VITE_-prefixed
+// variables here natively in both `vite dev` and `vite build`; the old process.env form was
+// only rewritten at build time, so it reached the browser literally during dev and threw
+// "process is not defined" before the app could render.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// True when Supabase credentials are missing; App.tsx shows a config screen instead of the app.
 // The App.tsx component will use this to show a full-screen error if it's true.
 export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey;
 
@@ -170,22 +168,6 @@ export const supabaseService = {
   },
 
   getUserProfile
-};
-
-
-export const geminiService = {
-  extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
-      const response = await fetch('/.netlify/functions/extract-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ fileContent, mimeType: mimeType || 'application/pdf', schema, promptText }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || `Document extraction failed (${response.status})`);
-      return result.data;
-  }
 };
 
 

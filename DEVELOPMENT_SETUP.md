@@ -10,15 +10,9 @@ Create a file named `.env.local` in your project root with the following content
 # Development Environment Variables
 # Replace these placeholder values with your actual API keys
 
-# Supabase Credentials (User defined prefix, e.g. VITE_)
+# Supabase Credentials
 VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-
-# Google Gemini API Key (MUST be named API_KEY)
-API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
-
-# Alternative Gemini API Key name (also supported)
-GEMINI_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 ```
 
 ## 2. Get Your API Keys
@@ -29,10 +23,8 @@ GEMINI_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 3. Copy your Project URL and paste it as `VITE_SUPABASE_URL`
 4. Copy your anon/public key and paste it as `VITE_SUPABASE_ANON_KEY`
 
-### Google Gemini API Setup
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Copy the key and paste it as `API_KEY` (or `GEMINI_API_KEY`)
+Document extraction (e-tickets and hotel vouchers) runs entirely in the browser via the
+PDF text layer, so no AI provider key is required.
 
 ## 3. Start Development Server
 

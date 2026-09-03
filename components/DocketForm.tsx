@@ -30,10 +30,12 @@ import {
   formatDate,
   getNumberOfNights,
   toBase64,
-  geminiService,
   amountToWords,
   formatDateTimeIST,
 } from "../services";
+import { extractDocumentData, explainExtractionFailure } from "../services/documentExtraction";
+import { parseETicketText } from "../services/ticketParser";
+import { parseHotelVoucherText } from "../services/voucherParser";
 import { useAuth } from "../hooks";
 import {
   Icons,
@@ -44,7 +46,6 @@ import {
   FormSelect,
 } from "./common";
 import { InvoiceGenerator } from "./InvoiceGenerator";
-import { Type } from "@google/genai";
 
 const createSector = (seed: Partial<FlightSector> = {}): FlightSector => ({
   id: seed.id || `SEC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -357,7 +358,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [documentLoading, setDocumentLoading] = useState(false);
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [newSupplier, setNewSupplier] = useState<Omit<Supplier, "id">>({
     name: "",
@@ -998,42 +999,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     }
   };
 
-  const ticketSchema = {
-    type: Type.OBJECT,
-    properties: {
-      tripType: { type: Type.STRING },
-      pnr: { type: Type.STRING },
-      bookingId: { type: Type.STRING },
-      passengers: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            fullName: { type: Type.STRING },
-            passengerType: { type: Type.STRING },
-            gender: { type: Type.STRING },
-          },
-        },
-      },
-      sectors: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            airline: { type: Type.STRING },
-            flightNumber: { type: Type.STRING },
-            departureDate: { type: Type.STRING },
-            departureTime: { type: Type.STRING },
-            departureAirport: { type: Type.STRING },
-            arrivalDate: { type: Type.STRING },
-            arrivalTime: { type: Type.STRING },
-            arrivalAirport: { type: Type.STRING },
-          },
-        },
-      },
-    },
-  };
-
   const passengerTypeFromAI = (value?: string) =>
     value?.toLowerCase().startsWith("inf")
       ? PassengerType.Infant
@@ -1055,7 +1020,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
-    setAiLoading(true);
+    setDocumentLoading(true);
     console.log("Uploading in tab: flight", "Updating flight details...");
 
     try {
@@ -1070,16 +1035,13 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         linkedItemId: flightId,
         linkedItemType: "flight",
       };
-      // Preserve the source document even if AI extraction is unavailable or fails.
+      // Preserve the source document even when the ticket cannot be read automatically.
       setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const prompt =
-        "Extract every passenger and every chronological flight sector from this e-ticket. Detect tripType as exactly One Way, Return, or Multi-City. Include PNR and booking ID. Preserve airline and airport codes. Dates must be YYYY-MM-DD and times HH:MM (24-hour). Do not omit connections or the inbound journey.";
-      const extractedData = await geminiService.extractDataFromDocument(
+      const { data: extractedData, reason } = await extractDocumentData({
         base64,
-        file.type,
-        ticketSchema,
-        prompt,
-      );
+        mimeType: file.type,
+        parse: parseETicketText,
+      });
 
       if (extractedData && extractedData.sectors?.length) {
         setFormState((prev) => {
@@ -1174,14 +1136,14 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         });
       } else {
         alert(
-          "The PDF is attached, but no flight sectors were detected. Please enter them manually and save the docket.",
+          explainExtractionFailure(reason),
         );
       }
     } catch (error) {
-      console.error("AI parsing error in Flight tab:", error);
-      alert("The PDF has been attached, but AI could not retrieve its details. You can enter the flight manually and save the docket.");
+      console.error("Ticket parsing error in Flight tab:", error);
+      alert("The PDF has been attached, but its details could not be read. You can enter the flight manually and save the docket.");
     } finally {
-      setAiLoading(false);
+      setDocumentLoading(false);
       e.target.value = "";
     }
   };
@@ -1193,7 +1155,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
-    setAiLoading(true);
+    setDocumentLoading(true);
     console.log("Uploading in tab: hotel", "Updating hotel details...");
 
     try {
@@ -1206,42 +1168,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         content: base64,
       };
       setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const prompt =
-        "From this hotel voucher, extract every guest full name plus hotel name, city, country, confirmation number, check-in, check-out, number of rooms, room type, meal plan and remarks. Dates must be YYYY-MM-DD.";
-      const schema = {
-        type: Type.OBJECT,
-        properties: {
-          passengers: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: { fullName: { type: Type.STRING } },
-            },
-          },
-          hotel: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              city: { type: Type.STRING },
-              country: { type: Type.STRING },
-              confirmationNumber: { type: Type.STRING },
-              checkIn: { type: Type.STRING },
-              checkOut: { type: Type.STRING },
-              numberOfRooms: { type: Type.NUMBER },
-              roomType: { type: Type.STRING },
-              mealPlan: { type: Type.STRING },
-              remarks: { type: Type.STRING },
-            },
-          },
-        },
-      };
-
-      const extractedData = await geminiService.extractDataFromDocument(
+      const { data: extractedData, reason } = await extractDocumentData({
         base64,
-        file.type,
-        schema,
-        prompt,
-      );
+        mimeType: file.type,
+        parse: parseHotelVoucherText,
+      });
 
       if (extractedData && extractedData.hotel) {
         setFormState((prev) => {
@@ -1301,15 +1232,16 @@ export const DocketForm: React.FC<DocketFormProps> = ({
           };
         });
       } else {
-        console.warn("AI did not return hotel data from the document.");
+        console.warn("Voucher layout not recognised:", reason);
+        alert(explainExtractionFailure(reason));
       }
     } catch (error) {
-      console.error("AI parsing error in Hotel tab:", error);
+      console.error("Voucher parsing error in Hotel tab:", error);
       alert(
-        "The voucher has been attached, but AI could not retrieve its details. You can enter the hotel manually and save the docket.",
+        "The voucher has been attached, but its details could not be read. You can enter the hotel manually and save the docket.",
       );
     } finally {
-      setAiLoading(false);
+      setDocumentLoading(false);
       e.target.value = "";
     }
   };
@@ -1561,7 +1493,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
   ) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    setAiLoading(true);
+    setDocumentLoading(true);
     try {
       const base64 = await toBase64(file);
       const uploadedFile: UploadedFile = {
@@ -1572,14 +1504,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         content: base64,
       };
       setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const prompt =
-        "Extract every passenger and every chronological flight sector from this e-ticket. Detect tripType as exactly One Way, Return, or Multi-City. Include PNR and booking ID. Dates must be YYYY-MM-DD and times HH:MM (24-hour). Do not omit connections or inbound sectors.";
-      const extractedData = await geminiService.extractDataFromDocument(
+      const { data: extractedData, reason } = await extractDocumentData({
         base64,
-        file.type,
-        ticketSchema,
-        prompt,
-      );
+        mimeType: file.type,
+        parse: parseETicketText,
+      });
       if (extractedData && extractedData.sectors?.length) {
         setFormState((prev) => {
           const extractedPassengers = extractedData.passengers || [];
@@ -1675,18 +1604,14 @@ export const DocketForm: React.FC<DocketFormProps> = ({
           };
         });
       } else {
-        console.warn(
-          "AI did not return flight data from the document (Passengers tab upload).",
-        );
-        alert(
-          "The PDF is attached, but flight details were not detected. Please enter them manually and save the docket.",
-        );
+        console.warn("Ticket layout not recognised:", reason);
+        alert(explainExtractionFailure(reason));
       }
     } catch (error) {
-      console.error("AI parsing error in Passengers tab:", error);
-      alert("The PDF has been attached, but AI could not retrieve its details. You can enter the flight manually and save the docket.");
+      console.error("Ticket parsing error in Passengers tab:", error);
+      alert("The PDF has been attached, but its details could not be read. You can enter the flight manually and save the docket.");
     } finally {
-      setAiLoading(false);
+      setDocumentLoading(false);
       e.target.value = "";
     }
   };
@@ -1764,11 +1689,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({
             </nav>
           </div>
 
-          {aiLoading && (
+          {documentLoading && (
             <div className="absolute inset-0 bg-white/70 z-30 flex flex-col justify-center items-center">
               <Spinner />
               <p className="mt-4 text-slate-600 font-semibold">
-                AI is processing your document...
+                Reading your document...
               </p>
             </div>
           )}
