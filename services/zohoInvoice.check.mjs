@@ -92,9 +92,12 @@ const sc = buildZohoInvoice({
 });
 check('place of supply is a code', sc.place_of_supply, 'TS');
 check('two lines', sc.line_items.length, 2);
-// Zoho refuses a line with no tax at all, so untaxed travel carries the zero rate.
-check('travel line carries the zero rate', sc.line_items[0].tax_id, T.inter.zero);
+// Untaxed travel is classified out of scope, not zero-rated: a zero-rated line still
+// enters the GST returns, an out-of-scope one does not. Verified against INV-000137.
+check('travel line is out of scope', sc.line_items[0].gst_treatment_code, 'out_of_scope');
+check('travel line carries no tax id', sc.line_items[0].tax_id, undefined);
 check('travel line has no SAC when untaxed', sc.line_items[0].hsn_or_sac, undefined);
+check('travel line typed as a service', sc.line_items[0].product_type, 'service');
 check('travel rate preserved', sc.line_items[0].rate, 269420);
 check('fee line is named SERVICE CHARGE', sc.line_items[1].name, 'SERVICE CHARGE');
 check('fee taxed at inter-state 18%', sc.line_items[1].tax_id, T.inter.eighteen);
@@ -113,7 +116,7 @@ const intra = buildZohoInvoice({
   gstTreatment: 'consumer',
 });
 check('intra-state fee uses the tax group', intra.line_items[1].tax_id, T.intra.eighteen);
-check('intra-state untaxed line uses the intra zero group', intra.line_items[0].tax_id, T.intra.zero);
+check('intra-state untaxed line is also out of scope', intra.line_items[0].gst_treatment_code, 'out_of_scope');
 check('group differs from IGST', intra.line_items[1].tax_id !== T.inter.eighteen, true);
 
 // --- package 5% mode, as INV-000133 ---------------------------------------
@@ -126,6 +129,7 @@ const pkg = buildZohoInvoice({
   gstMode: 'package_5',
   gstTreatment: 'business_gst',
 });
+check('taxed lines carry no gst_treatment_code', pkg.line_items.every((l) => !l.gst_treatment_code), true);
 check('every travel line taxed at 5%', pkg.line_items.map((l) => l.tax_id), [
   T.inter.five,
   T.inter.five,
@@ -162,7 +166,7 @@ const none = buildZohoInvoice({
   gstMode: 'none',
   gstTreatment: 'consumer',
 });
-check('no-GST mode uses the zero rate', none.line_items.every((l) => l.tax_id === T.inter.zero), true);
+check('no-GST mode marks every line out of scope', none.line_items.every((l) => l.gst_treatment_code === 'out_of_scope' && !l.tax_id), true);
 check('chandigarh code', none.place_of_supply, 'CH');
 
 // --- guards ---------------------------------------------------------------

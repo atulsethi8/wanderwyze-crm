@@ -3,13 +3,16 @@ import { InvoiceLineItem } from '../types';
 /**
  * Builds a Zoho Books invoice payload from a docket.
  *
- * Written against the shape of Wander Wyze's own recent invoices rather than the generic
- * API docs, because the GST treatment is a business decision that the docs cannot tell us:
+ * Written against the shape of Wander Wyze's own recent invoices rather than the generic API
+ * docs, because the GST treatment is a business decision the docs cannot express:
  *
- *   - B2C customers are charged a service fee, with 18% GST on that fee alone. The travel
- *     component itself is not taxed (the agency acts as a pure agent).
- *   - B2B customers may instead be charged 5% GST on the whole package value.
- *   - 5% is never valid for a B2C customer, so the caller must not offer it there.
+ *   - a service fee with 18% GST on the fee alone, the travel itself out of scope (most
+ *     common: the agency acts as a pure agent)
+ *   - 5% on the whole package value, which applies to a registered business
+ *   - no GST at all
+ *
+ * The agent chooses per invoice; nothing is inferred from the customer record. gstModeWarning
+ * flags the B2B caveat on the 5% rate without blocking it.
  *
  * Line items are deliberately ad-hoc (name + rate, no item_id). The Books item catalogue is
  * already polluted with per-booking entries like "FLIGHT BOM-HYD-BOM" and "MR NEERAJ JHA";
@@ -139,6 +142,14 @@ export const gstModeWarning = (mode: GstMode, gstTreatment?: string): string | n
   return `This customer is "${gstTreatment}" in Zoho, not a registered business. The 5% package rate normally applies only to B2B customers.`;
 };
 
+/**
+ * How a line that bears no GST is classified. This is not the same as a 0% tax: a zero-rated
+ * line still appears in the GST returns as a taxable supply, whereas out-of-scope does not
+ * appear at all. Zoho describes it as "Supplies on which you don't charge any GST or include
+ * them in the returns".
+ */
+export type UntaxedTreatment = 'out_of_scope' | 'non_gst_supply';
+
 export interface ZohoLineItem {
   name: string;
   description?: string;
@@ -146,6 +157,9 @@ export interface ZohoLineItem {
   quantity: number;
   tax_id?: string;
   hsn_or_sac?: string;
+  /** Set instead of tax_id on lines that bear no GST. */
+  gst_treatment_code?: UntaxedTreatment;
+  product_type?: 'goods' | 'service';
 }
 
 export interface ZohoInvoicePayload {
@@ -175,6 +189,8 @@ export interface BuildInvoiceInput {
   gstTreatment?: string;
   /** Docket number, so the invoice can be traced back from Books. */
   reference?: string;
+  /** Classification for lines bearing no GST. Defaults to out of scope. */
+  untaxedTreatment?: UntaxedTreatment;
   notes?: string;
   terms?: string;
   taxes?: ZohoTaxConfig;
@@ -210,21 +226,26 @@ export const buildZohoInvoice = (input: BuildInvoiceInput): ZohoInvoicePayload =
 
   const travelTaxId = input.gstMode === 'package_5' ? rates.five : undefined;
 
-  // Every line must name a tax: creating one with none is rejected with "Specify either a
-  // Tax or Tax Exemption", even though invoices raised by hand in the Zoho UI show a blank
-  // tax on the travel component. Untaxed lines therefore carry the zero-rated tax, which is
-  // arithmetically identical and accepted by the API.
-  const untaxedId = intraState ? taxes.intra.zero : taxes.inter.zero;
-  const travelLineTaxId = travelTaxId ?? untaxedId;
+  // A line must declare either a tax or a GST treatment; sending neither is rejected with
+  // "Specify either a Tax or Tax Exemption". Untaxed travel is classified out of scope
+  // rather than zero-rated, matching how these invoices are raised by hand - and the two
+  // are not interchangeable, since a zero-rated line still enters the GST returns.
+  //
+  // A tax exemption would be the obvious alternative, but Zoho rejects an invoice that mixes
+  // exempt and taxable lines under rule 46A. An out-of-scope line is not caught by that rule,
+  // which is what allows the travel-plus-service-fee invoice to exist at all.
+  const untaxed = input.untaxedTreatment ?? 'out_of_scope';
 
   const line_items: ZohoLineItem[] = billable.map((item) => ({
     name: (item.description || 'Travel services').slice(0, 100),
     description: item.description || '',
     rate: Number(item.rate) || 0,
     quantity: Number(item.quantity) || 1,
-    tax_id: travelLineTaxId,
+    product_type: 'service',
     // A SAC belongs only on lines that actually bear tax.
-    ...(travelTaxId ? { hsn_or_sac: TRAVEL_SAC } : {}),
+    ...(travelTaxId
+      ? { tax_id: travelTaxId, hsn_or_sac: TRAVEL_SAC }
+      : { gst_treatment_code: untaxed }),
   }));
 
   // Under service-charge mode the fee is a separate taxed line, matching how these invoices
