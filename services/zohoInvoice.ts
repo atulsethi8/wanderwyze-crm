@@ -210,13 +210,21 @@ export const buildZohoInvoice = (input: BuildInvoiceInput): ZohoInvoicePayload =
 
   const travelTaxId = input.gstMode === 'package_5' ? rates.five : undefined;
 
+  // Every line must name a tax: creating one with none is rejected with "Specify either a
+  // Tax or Tax Exemption", even though invoices raised by hand in the Zoho UI show a blank
+  // tax on the travel component. Untaxed lines therefore carry the zero-rated tax, which is
+  // arithmetically identical and accepted by the API.
+  const untaxedId = intraState ? taxes.intra.zero : taxes.inter.zero;
+  const travelLineTaxId = travelTaxId ?? untaxedId;
+
   const line_items: ZohoLineItem[] = billable.map((item) => ({
     name: (item.description || 'Travel services').slice(0, 100),
     description: item.description || '',
     rate: Number(item.rate) || 0,
     quantity: Number(item.quantity) || 1,
-    hsn_or_sac: TRAVEL_SAC,
-    ...(travelTaxId ? { tax_id: travelTaxId } : {}),
+    tax_id: travelLineTaxId,
+    // A SAC belongs only on lines that actually bear tax.
+    ...(travelTaxId ? { hsn_or_sac: TRAVEL_SAC } : {}),
   }));
 
   // Under service-charge mode the fee is a separate taxed line, matching how these invoices

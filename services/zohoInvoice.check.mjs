@@ -92,7 +92,9 @@ const sc = buildZohoInvoice({
 });
 check('place of supply is a code', sc.place_of_supply, 'TS');
 check('two lines', sc.line_items.length, 2);
-check('travel line carries no tax', sc.line_items[0].tax_id, undefined);
+// Zoho refuses a line with no tax at all, so untaxed travel carries the zero rate.
+check('travel line carries the zero rate', sc.line_items[0].tax_id, T.inter.zero);
+check('travel line has no SAC when untaxed', sc.line_items[0].hsn_or_sac, undefined);
 check('travel rate preserved', sc.line_items[0].rate, 269420);
 check('fee line is named SERVICE CHARGE', sc.line_items[1].name, 'SERVICE CHARGE');
 check('fee taxed at inter-state 18%', sc.line_items[1].tax_id, T.inter.eighteen);
@@ -111,6 +113,7 @@ const intra = buildZohoInvoice({
   gstTreatment: 'consumer',
 });
 check('intra-state fee uses the tax group', intra.line_items[1].tax_id, T.intra.eighteen);
+check('intra-state untaxed line uses the intra zero group', intra.line_items[0].tax_id, T.intra.zero);
 check('group differs from IGST', intra.line_items[1].tax_id !== T.inter.eighteen, true);
 
 // --- package 5% mode, as INV-000133 ---------------------------------------
@@ -159,7 +162,7 @@ const none = buildZohoInvoice({
   gstMode: 'none',
   gstTreatment: 'consumer',
 });
-check('no tax on any line', none.line_items.every((l) => !l.tax_id), true);
+check('no-GST mode uses the zero rate', none.line_items.every((l) => l.tax_id === T.inter.zero), true);
 check('chandigarh code', none.place_of_supply, 'CH');
 
 // --- guards ---------------------------------------------------------------
