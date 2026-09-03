@@ -32,21 +32,22 @@ let clientId = argId;
 let clientSecret = argSecret;
 let code = argCode;
 
+const DEFAULT_CLIENT_ID = '1000.PCDPB2H6B7UGC2NT2KY9SYDN2J7ZNW';
+
+// Prompt only for what was not supplied, so a value already to hand need not be retyped.
 if (!clientId || !clientSecret || !code) {
   const rl = readline.createInterface({ input, output });
 
   console.log('\nZoho Books setup');
   console.log('----------------');
   console.log('Org ID:', ORG_ID);
-  console.log('\nGenerate a FRESH grant code at your Zoho API console:');
-  console.log('  Self Client -> Generate Code');
-  console.log('  Scopes: ZohoBooks.invoices.CREATE,ZohoBooks.invoices.READ,ZohoBooks.contacts.CREATE,ZohoBooks.contacts.READ,ZohoBooks.settings.READ');
-  console.log('  Set the validity dropdown to 10 minutes.');
-  console.log('\nCopy the Client ID and Client Secret from that SAME Self Client.\n');
+  console.log('\nAll three values must come from the SAME Self Client.\n');
 
-  clientId = (await rl.question('Client ID    : ')).trim();
-  clientSecret = (await rl.question('Client secret: ')).trim();
-  code = (await rl.question('Grant code   : ')).trim();
+  if (!clientId) {
+    clientId = (await rl.question(`Client ID    [${DEFAULT_CLIENT_ID}]: `)).trim() || DEFAULT_CLIENT_ID;
+  }
+  if (!clientSecret) clientSecret = (await rl.question('Client secret: ')).trim();
+  if (!code) code = (await rl.question('Grant code   : ')).trim();
   rl.close();
 }
 
