@@ -1,47 +1,46 @@
-
 export enum BookingStatus {
-  InProgress = 'In Progress',
-  Confirmed = 'Confirmed',
-  Cancelled = 'Cancelled',
+  InProgress = "In Progress",
+  Confirmed = "Confirmed",
+  Cancelled = "Cancelled",
 }
 
 export enum Tag {
-  Individual = 'Individual',
-  Group = 'Group',
+  Individual = "Individual",
+  Group = "Group",
 }
 
 export enum PaymentType {
-  Cash = 'Cash',
-  BankTransfer = 'Bank Transfer',
-  CreditCard = 'Credit Card',
-  Other = 'Other',
+  Cash = "Cash",
+  BankTransfer = "Bank Transfer",
+  CreditCard = "Credit Card",
+  Other = "Other",
 }
 
 export enum PassengerType {
-    Adult = 'Adult',
-    Child = 'Child',
-    Infant = 'Infant',
+  Adult = "Adult",
+  Child = "Child",
+  Infant = "Infant",
 }
 
 export enum Gender {
-    Male = 'Male',
-    Female = 'Female',
-    Other = 'Other',
+  Male = "Male",
+  Female = "Female",
+  Other = "Other",
 }
 
 export enum LeadSource {
-    WalkIn = "Walk-in",
-    Referral = "Referral",
-    SocialMedia = "Social Media",
-    Website = "Website",
-    ColdCall = "Cold Call",
-    Other = "Other",
+  WalkIn = "Walk-in",
+  Referral = "Referral",
+  SocialMedia = "Social Media",
+  Website = "Website",
+  ColdCall = "Cold Call",
+  Other = "Other",
 }
 
 export enum LeadStatus {
-    Cold = 'cold',
-    Warm = 'warm',
-    Final = 'final'
+  Cold = "cold",
+  Warm = "warm",
+  Final = "final",
 }
 
 export interface Client {
@@ -119,10 +118,24 @@ export interface Agent {
 }
 
 export interface FlightPassengerDetail {
-    passengerId: string;
-    passengerType: PassengerType;
-    netCost: number;
-    grossBilled: number;
+  passengerId: string;
+  passengerType: PassengerType;
+  netCost: number;
+  grossBilled: number;
+}
+
+export type FlightTripType = "One Way" | "Return" | "Multi-City";
+
+export interface FlightSector {
+  id: string;
+  airline: string;
+  flightNumber?: string;
+  departureDate: string;
+  departureTime?: string;
+  arrivalDate?: string;
+  arrivalTime?: string;
+  departureAirport: string;
+  arrivalAirport: string;
 }
 
 export interface Flight {
@@ -143,6 +156,9 @@ export interface Flight {
   commonNetCost: number;
   commonGrossBilled: number;
   passengerDetails: FlightPassengerDetail[];
+  /** New dockets use sectors; the legacy top-level fields remain for old records and reports. */
+  tripType?: FlightTripType;
+  sectors?: FlightSector[];
 }
 
 export interface Hotel {
@@ -155,10 +171,16 @@ export interface Hotel {
   grossBilled: number;
   supplier: Supplier | null;
   paxRefs: string[];
+  city?: string;
+  country?: string;
+  confirmationNumber?: string;
+  roomType?: string;
+  mealPlan?: string;
+  remarks?: string;
 }
 
 export interface Excursion {
-  id:string;
+  id: string;
   name: string;
   date: string;
   netCost: number;
@@ -202,7 +224,7 @@ export interface UploadedFile {
   size: number;
   content: string; // Base64 encoded content
   linkedItemId?: string;
-  linkedItemType?: 'flight' | 'hotel' | 'excursion' | 'transfer';
+  linkedItemType?: "flight" | "hotel" | "excursion" | "transfer";
 }
 
 export interface Comment {
@@ -241,14 +263,13 @@ export interface Invoice {
   subtotal: number;
   gstAmount: number;
   grandTotal: number;
-  gstType: 'IGST' | 'CGST/SGST';
+  gstType: "IGST" | "CGST/SGST";
   gstOnTotal?: boolean;
   gstOnTotalRate?: number;
   companySettings: CompanySettings; // snapshot of settings at time of creation
   terms: string;
   dueDate: string;
 }
-
 
 export interface Docket {
   id: string;
@@ -273,7 +294,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email?: string;
-  role: 'admin' | 'user';
+  role: "admin" | "user";
 }
 
 export interface DocketDeletionLog {
