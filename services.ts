@@ -3,7 +3,6 @@
 // It caused confusion as the environment doesn't seem to be a standard Vite setup.
 
 import { createClient, type User } from "@supabase/supabase-js";
-import { GoogleGenAI, Type } from "@google/genai";
 import { AuthUser } from "./types";
 import { Database } from './database.types';
 
@@ -23,13 +22,9 @@ import { Database } from './database.types';
 // these at build time.
 const supabaseUrl = process.env.VITE_SUPABASE_URL as unknown as string | undefined;
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY as unknown as string | undefined;
-// The Gemini API key MUST be API_KEY as per coding guidelines.
-const geminiApiKey = process.env.API_KEY as unknown as string | undefined;
-
-
 // This flag checks if ALL required keys have been configured.
 // The App.tsx component will use this to show a full-screen error if it's true.
-export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey || !geminiApiKey;
+export const usingDefaultKeys = !supabaseUrl || !supabaseAnonKey;
 
 // We initialize Supabase client here.
 // To prevent the app from crashing on startup if keys are missing, we provide
@@ -178,48 +173,18 @@ export const supabaseService = {
 };
 
 
-let ai: GoogleGenAI | null = null;
-
-const initializeAi = (): GoogleGenAI => {
-    if (!ai) {
-        // The `usingDefaultKeys` check in App.tsx ensures the app doesn't run if geminiApiKey is missing.
-        // The '!' asserts it's not null here.
-        ai = new GoogleGenAI({apiKey: geminiApiKey!});
-    }
-    return ai;
-};
-
-
 export const geminiService = {
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
-      const aiInstance = initializeAi();
-      const safeMimeType = mimeType || 'application/pdf';
-      const documentPart = { inlineData: { data: fileContent, mimeType: safeMimeType } };
-      const textPart = { text: promptText };
-      const parseJson = (text: string) => {
-        const cleaned = (text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-        const firstBrace = cleaned.indexOf('{');
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (firstBrace < 0 || lastBrace < firstBrace) throw new Error('AI returned no JSON object');
-        return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-      };
-
-      try {
-        const response = await aiInstance.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: { parts: [textPart, documentPart] },
-          config: { responseMimeType: "application/json", responseSchema: schema }
-        });
-        return parseJson(response.text || '');
-      } catch (structuredError) {
-        console.warn('Structured document extraction failed; retrying with JSON-only output.', structuredError);
-        const fallback = await aiInstance.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: { parts: [{ text: `${promptText}\nReturn only one valid JSON object. Do not use markdown fences.` }, documentPart] },
-          config: { responseMimeType: "application/json" }
-        });
-        return parseJson(fallback.text || '');
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
+      const response = await fetch('/.netlify/functions/extract-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ fileContent, mimeType: mimeType || 'application/pdf', schema, promptText }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Document extraction failed (${response.status})`);
+      return result.data;
   }
 };
 
