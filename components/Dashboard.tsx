@@ -1,231 +1,7 @@
-
-
-import React, { useState, useMemo } from 'react';
-import { Docket, BookingStatus, Agent } from '../types';
-import { STATUS_COLORS } from '../constants';
-import { formatCurrency, formatDate, toYYYYMMDD } from '../services';
-import { Icons } from './common';
-
-interface DocketCardProps {
-  docket: Docket;
-  agentName?: string;
-  onClick: () => void;
-}
-
-const DocketCard: React.FC<DocketCardProps> = ({ docket, agentName, onClick }) => {
-    const { status, client, id, itinerary, passengers } = docket;
-    const statusStyle = STATUS_COLORS[status];
-
-    const financialSummary = useMemo(() => {
-        // Calculate total billed amount including GST from invoices
-        let totalBilled = 0;
-        
-        if (docket.invoices && docket.invoices.length > 0) {
-            // If invoices exist, use the grand total from invoices (includes GST)
-            totalBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
-        } else {
-            // Fallback to itinerary gross billed if no invoices
-            totalBilled = [
-                ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
-                ...itinerary.hotels.map(h => h.grossBilled),
-                ...itinerary.excursions.map(a => a.grossBilled),
-                ...itinerary.transfers.map(t => t.grossBilled),
-            ].reduce((sum, current) => sum + current, 0);
-        }
-
-        const totalPaid = docket.payments.reduce((sum, p) => sum + p.amount, 0);
-        const balanceDue = totalBilled - totalPaid;
-
-        return { grossBilled: totalBilled, balanceDue };
-    }, [docket]);
-
-    const mainDestination = itinerary.flights[0]?.arrivalAirport || itinerary.hotels[0]?.name || 'N/A';
-    const travelDate = itinerary.flights[0]?.departureDate || itinerary.hotels[0]?.checkIn || 'N/A';
-
-    return (
-        <div onClick={onClick} className={`bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 cursor-pointer border-l-4 ${statusStyle.border}`}>
-            <div className="p-5">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h3 className="text-lg font-bold text-brand-primary truncate">{client.name}</h3>
-                        <p className="text-xs text-slate-500">{id}</p>
-                    </div>
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusStyle.bg} ${statusStyle.text}`}>{status}</span>
-                </div>
-                <div className="mt-4 space-y-2 text-sm text-slate-600">
-                    <div className="flex items-center">
-                        <svg className="w-4 h-4 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        <span>{mainDestination}</span>
-                    </div>
-                     <div className="flex items-center">
-                        {Icons.calendar}
-                        <span className="ml-2">{formatDate(travelDate)}</span>
-                    </div>
-                    <div className="flex items-center">
-                        {Icons.user}
-                        <span className="ml-2">{passengers.length} PAX</span>
-                    </div>
-                    {agentName && (
-                        <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" /></svg>
-                            <span>Agent: {agentName}</span>
-                        </div>
-                    )}
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-500">Total Billed:</span>
-                        <span className="font-semibold text-slate-700">{formatCurrency(financialSummary.grossBilled)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm mt-1">
-                        <span className="text-slate-500">Balance Due:</span>
-                        <span className="font-bold text-orange-600">{formatCurrency(financialSummary.balanceDue)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const OutstandingBalances: React.FC<{ dockets: Docket[]; onSelectDocket: (id: string) => void }> = ({ dockets, onSelectDocket }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const outstandingDockets = useMemo(() => {
-    const getEarliestDate = (itinerary: Docket['itinerary']) => {
-        const dates = [
-            ...itinerary.flights.map(f => f.departureDate),
-            ...itinerary.hotels.map(h => h.checkIn)
-        ].filter(Boolean).map(d => new Date(`${d as string}T00:00:00`));
-        
-        if (dates.length === 0) return null;
-
-        const validDates = dates.filter(d => !isNaN(d.getTime()));
-        if (validDates.length === 0) return null;
-
-        return new Date(Math.min.apply(null, validDates as any));
-    };
-
-    return dockets
-      .map(docket => {
-        const { itinerary, payments, client, id, status, passengers, invoices } = docket;
-        
-        // Calculate total billed amount including GST from invoices
-        let grossBilled = 0;
-        
-        if (invoices && invoices.length > 0) {
-            // If invoices exist, use the grand total from invoices (includes GST)
-            grossBilled = invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
-        } else {
-            // Fallback to itinerary gross billed if no invoices
-            grossBilled = [
-              ...itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
-              ...itinerary.hotels.map(h => h.grossBilled),
-              ...itinerary.excursions.map(a => a.grossBilled),
-              ...itinerary.transfers.map(t => t.grossBilled),
-            ].reduce((sum, current) => sum + (current || 0), 0);
-        }
-
-        const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-        const balanceDue = grossBilled - totalPaid;
-        const mainDestination = itinerary.flights[0]?.arrivalAirport || itinerary.hotels[0]?.name || 'N/A';
-        const earliestDeparture = getEarliestDate(itinerary);
-
-        return {
-          id,
-          clientName: client.name,
-          grossBilled,
-          totalPaid,
-          balanceDue,
-          status,
-          passengers,
-          mainDestination,
-          earliestDeparture,
-        };
-      })
-      .filter(d => d.status === BookingStatus.Confirmed && d.balanceDue > 0)
-      .sort((a, b) => {
-          if (!a.earliestDeparture && !b.earliestDeparture) return b.balanceDue - a.balanceDue;
-          if (!a.earliestDeparture) return 1;
-          if (!b.earliestDeparture) return -1;
-          return a.earliestDeparture.getTime() - b.earliestDeparture.getTime();
-      });
-  }, [dockets]);
-
-  const filteredOutstandingDockets = useMemo(() => {
-    if (!searchTerm) return outstandingDockets;
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return outstandingDockets.filter(d =>
-      d.id.toLowerCase().includes(lowercasedFilter) ||
-      d.clientName.toLowerCase().includes(lowercasedFilter) ||
-      d.mainDestination.toLowerCase().includes(lowercasedFilter) ||
-      d.passengers.some(p => p.fullName.toLowerCase().includes(lowercasedFilter))
-    );
-  }, [outstandingDockets, searchTerm]);
-
-  if (outstandingDockets.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mt-12 bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-slate-800 mb-4">Outstanding Balances</h2>
-      <div className="mb-4">
-        <div className="relative">
-            <input
-              type="text"
-              placeholder="Search by client, PAX, destination, ID..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full max-w-sm pl-10 pr-4 py-2 border bg-white border-slate-300 rounded-full shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-primary"
-            />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </div>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Docket ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client Name</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Departure Date</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Total Billed</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount Paid</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Balance Due</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
-            {filteredOutstandingDockets.map(docket => (
-              <tr key={docket.id} className={docket.balanceDue > 50000 ? 'bg-red-50' : ''}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{docket.docketNo || docket.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docket.clientName}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{docket.earliestDeparture ? formatDate(toYYYYMMDD(docket.earliestDeparture)) : 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{formatCurrency(docket.grossBilled)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">{formatCurrency(docket.totalPaid)}</td>
-                <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${docket.balanceDue > 50000 ? 'text-red-700' : 'text-orange-600'}`}>{formatCurrency(docket.balanceDue)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <button onClick={() => onSelectDocket(docket.id)} className="text-brand-primary hover:underline font-semibold">
-                    View Docket
-                  </button>
-                </td>
-              </tr>
-            ))}
-             {filteredOutstandingDockets.length === 0 && (
-                <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-500">
-                        No outstanding balances match your search.
-                    </td>
-                </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
+import React, { useMemo, useState } from "react";
+import { Agent, BookingStatus, Docket } from "../types";
+import { STATUS_COLORS } from "../constants";
+import { formatCurrency, formatDate } from "../services";
 
 interface DashboardProps {
   dockets: Docket[];
@@ -233,36 +9,380 @@ interface DashboardProps {
   onSelectDocket: (id: string) => void;
   searchTerm?: string;
 }
+type ProductFilter = "All Bookings" | "Flights" | "Hotels" | "Packages";
 
-export const Dashboard: React.FC<DashboardProps> = ({ dockets, agents, onSelectDocket, searchTerm = '' }) => {
-  const filteredDockets = useMemo(() => {
-    if (!searchTerm) return dockets;
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return dockets.filter(docket => 
-        docket.id.toLowerCase().includes(lowercasedFilter) ||
-        docket.searchTags.some(tag => tag.includes(lowercasedFilter))
-    );
-  }, [dockets, searchTerm]);
+const money = (d: Docket) => {
+  const amount = d.invoices?.length
+    ? d.invoices.reduce((s, i) => s + (i.grandTotal || 0), 0)
+    : [
+        ...d.itinerary.flights.flatMap((f) =>
+          f.passengerDetails.map((p) => p.grossBilled || 0),
+        ),
+        ...d.itinerary.hotels.map((h) => h.grossBilled || 0),
+        ...d.itinerary.excursions.map((e) => e.grossBilled || 0),
+        ...d.itinerary.transfers.map((t) => t.grossBilled || 0),
+        d.itinerary.serviceCharge?.grossBilled || 0,
+      ].reduce((s, v) => s + v, 0);
+  return {
+    amount,
+    balance: amount - d.payments.reduce((s, p) => s + (p.amount || 0), 0),
+  };
+};
+const travelDate = (d: Docket) =>
+  [
+    ...d.itinerary.flights.map(
+      (f) => f.sectors?.[0]?.departureDate || f.departureDate,
+    ),
+    ...d.itinerary.hotels.map((h) => h.checkIn),
+    ...d.itinerary.excursions.map((e) => e.date),
+    ...d.itinerary.transfers.map((t) => t.date),
+  ]
+    .filter(Boolean)
+    .sort()[0] || "";
+const product = (d: Docket) => {
+  const { flights, hotels, excursions, transfers } = d.itinerary;
+  if (
+    (flights.length && hotels.length) ||
+    excursions.length ||
+    transfers.length
+  ) {
+    const destination =
+      flights[0]?.sectors?.at(-1)?.arrivalAirport ||
+      flights[0]?.arrivalAirport ||
+      hotels[0]?.city ||
+      hotels[0]?.name ||
+      "Trip";
+    return {
+      type: "Packages" as const,
+      text: `✈ + 🏨 ${destination} Package`,
+    };
+  }
+  if (flights.length) {
+    const f = flights[0],
+      first = f.sectors?.[0],
+      last = f.sectors?.at(-1);
+    return {
+      type: "Flights" as const,
+      text: `✈ ${first?.departureAirport || f.departureAirport || "—"} → ${last?.arrivalAirport || f.arrivalAirport || "—"} • ${f.tripType || (f.returnDate ? "Return" : "One Way")}`,
+    };
+  }
+  if (hotels.length) {
+    const h = hotels[0],
+      nights =
+        h.checkIn && h.checkOut
+          ? Math.max(
+              0,
+              Math.round(
+                (new Date(h.checkOut).getTime() -
+                  new Date(h.checkIn).getTime()) /
+                  86400000,
+              ),
+            )
+          : 0;
+    return {
+      type: "Hotels" as const,
+      text: `🏨 ${h.name || "Hotel"}${nights ? ` • ${nights}N` : ""}`,
+    };
+  }
+  return { type: "Packages" as const, text: "Trip details pending" };
+};
+const bookingRef = (d: Docket) =>
+  d.itinerary.flights.find((f) => f.pnr)?.pnr ||
+  d.itinerary.flights.find((f) => f.bookingId)?.bookingId ||
+  d.itinerary.hotels.find((h) => h.confirmationNumber)?.confirmationNumber ||
+  "—";
+
+export const Dashboard: React.FC<DashboardProps> = ({
+  dockets,
+  agents,
+  onSelectDocket,
+  searchTerm = "",
+}) => {
+  const [productFilter, setProductFilter] =
+    useState<ProductFilter>("All Bookings");
+  const [statusFilter, setStatusFilter] = useState("All"),
+    [agentFilter, setAgentFilter] = useState("All");
+  const [travelFrom, setTravelFrom] = useState(""),
+    [travelTo, setTravelTo] = useState("");
+  const rows = useMemo(
+    () =>
+      dockets
+        .map((docket) => ({
+          docket,
+          product: product(docket),
+          ...money(docket),
+          bookingRef: bookingRef(docket),
+          leadTraveller: docket.passengers[0]?.fullName || docket.client.name,
+          travelDate: travelDate(docket),
+          agent: agents.find((a) => a.id === docket.agentId),
+        }))
+        .filter((row) => {
+          const q = searchTerm.trim().toLowerCase();
+          const match =
+            !q ||
+            [
+              row.docket.docketNo,
+              row.docket.id,
+              row.bookingRef,
+              row.leadTraveller,
+              row.docket.client.name,
+              row.product.text,
+              row.agent?.name,
+            ].some((v) => v?.toLowerCase().includes(q)) ||
+            row.docket.searchTags?.some((t) => t.toLowerCase().includes(q));
+          return (
+            match &&
+            (productFilter === "All Bookings" ||
+              row.product.type === productFilter) &&
+            (statusFilter === "All" || row.docket.status === statusFilter) &&
+            (agentFilter === "All" || row.docket.agentId === agentFilter) &&
+            (!travelFrom ||
+              (!!row.travelDate && row.travelDate >= travelFrom)) &&
+            (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
+          );
+        })
+        .sort((a, b) =>
+          (a.travelDate || "9999").localeCompare(b.travelDate || "9999"),
+        ),
+    [
+      dockets,
+      agents,
+      searchTerm,
+      productFilter,
+      statusFilter,
+      agentFilter,
+      travelFrom,
+      travelTo,
+    ],
+  );
+  const outstanding = useMemo(
+    () => dockets.reduce((s, d) => s + Math.max(0, money(d).balance), 0),
+    [dockets],
+  );
+  const upcoming = useMemo(
+    () =>
+      dockets.filter((d) => {
+        const date = travelDate(d);
+        if (!date) return false;
+        const days =
+          (new Date(`${date}T00:00:00`).getTime() -
+            new Date().setHours(0, 0, 0, 0)) /
+          86400000;
+        return days >= 0 && days <= 30 && d.status !== BookingStatus.Cancelled;
+      }).length,
+    [dockets],
+  );
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
-        <div className="max-w-7xl mx-auto">
-            {filteredDockets.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredDockets.map(docket => {
-                        const agentName = docket.agentId ? agents.find(a => a.id === docket.agentId)?.name : undefined;
-                        return <DocketCard key={docket.id} docket={docket} agentName={agentName} onClick={() => onSelectDocket(docket.id)} />
-                    })}
-                </div>
-            ) : (
-                <div className="text-center py-16 bg-white rounded-lg shadow-md">
-                    <h3 className="text-xl font-semibold text-slate-700">No Dockets Found</h3>
-                    <p className="text-slate-500 mt-2">Try adjusting your search or create a new docket.</p>
-                </div>
-            )}
-            
-            <OutstandingBalances dockets={dockets} onSelectDocket={onSelectDocket} />
+      <div className="max-w-[1600px] mx-auto space-y-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ["Total bookings", dockets.length.toString()],
+            [
+              "Confirmed",
+              dockets
+                .filter((d) => d.status === BookingStatus.Confirmed)
+                .length.toString(),
+            ],
+            ["Travel in 30 days", upcoming.toString()],
+            ["Outstanding", formatCurrency(outstanding)],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {label}
+              </p>
+              <p className="mt-1 text-2xl font-bold text-slate-800">{value}</p>
+            </div>
+          ))}
         </div>
+        <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-slate-200">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-slate-800">
+                  Booking Queue
+                </h1>
+                <p className="text-sm text-slate-500">
+                  {rows.length} booking{rows.length === 1 ? "" : "s"} shown
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    "All Bookings",
+                    "Flights",
+                    "Hotels",
+                    "Packages",
+                  ] as ProductFilter[]
+                ).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setProductFilter(f)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${productFilter === f ? "bg-brand-primary text-white border-brand-primary" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <select
+                aria-label="Filter by status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+              >
+                <option>All</option>
+                {Object.values(BookingStatus).map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter by agent"
+                value={agentFilter}
+                onChange={(e) => setAgentFilter(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+              >
+                <option value="All">All agents</option>
+                <option value="">Unassigned</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Travel from"
+                title="Travel from"
+                type="date"
+                value={travelFrom}
+                onChange={(e) => setTravelFrom(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              <input
+                aria-label="Travel to"
+                title="Travel to"
+                type="date"
+                value={travelTo}
+                onChange={(e) => setTravelTo(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[1280px] w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  {[
+                    "Docket No.",
+                    "PNR / Booking Ref",
+                    "Lead Traveller",
+                    "Travel Date",
+                    "Booking Date",
+                    "Product / Trip Details",
+                    "Status",
+                    "Amount",
+                    "Balance",
+                    "Agent",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => {
+                  const s = STATUS_COLORS[r.docket.status];
+                  return (
+                    <tr
+                      key={r.docket.id}
+                      onDoubleClick={() => onSelectDocket(r.docket.id)}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="px-4 py-3 text-sm font-mono font-semibold text-slate-700">
+                        {r.docket.docketNo || r.docket.id}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-700">
+                        {r.bookingRef}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <p className="font-semibold text-slate-800">
+                          {r.leadTraveller}
+                        </p>
+                        {r.docket.passengers.length > 1 && (
+                          <p className="text-xs text-slate-500">
+                            +{r.docket.passengers.length - 1} traveller
+                            {r.docket.passengers.length > 2 ? "s" : ""}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                        {r.travelDate ? formatDate(r.travelDate) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                        {r.docket.createdAt
+                          ? formatDate(r.docket.createdAt.slice(0, 10))
+                          : "—"}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-sm font-medium text-slate-700 max-w-xs truncate"
+                        title={r.product.text}
+                      >
+                        {r.product.text}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${s.bg} ${s.text}`}
+                        >
+                          {r.docket.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-700 whitespace-nowrap">
+                        {formatCurrency(r.amount)}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${r.balance > 0 ? "text-orange-600" : "text-emerald-700"}`}
+                      >
+                        {formatCurrency(r.balance)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {r.agent?.name || "Unassigned"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => onSelectDocket(r.docket.id)}
+                          className="text-brand-primary hover:underline font-semibold text-sm"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!rows.length && (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="py-14 text-center text-slate-500"
+                    >
+                      No bookings match these filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   );
 };
