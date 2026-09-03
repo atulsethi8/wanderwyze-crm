@@ -77,11 +77,16 @@ const summarise = (invoice: any) => ({
   invoiceId: invoice.invoice_id,
   invoiceNumber: invoice.invoice_number,
   status: invoice.status,
+  subTotal: invoice.sub_total,
+  taxTotal: invoice.tax_total,
   total: invoice.total,
   balance: invoice.balance,
   date: invoice.date,
   dueDate: invoice.due_date,
   customerName: invoice.customer_name,
+  // Matches the URL pattern Books itself uses (books.zoho.com/app/{org}#/invoices/{id}),
+  // built server-side since the org id is not otherwise exposed to the browser.
+  invoiceUrl: `${(process.env.ZOHO_ACCOUNTS_HOST || '').includes('.in') ? 'https://books.zoho.in' : 'https://books.zoho.com'}/app/${process.env.ZOHO_ORG_ID}#/invoices/${invoice.invoice_id}`,
 });
 
 export const handler = async (event: any) => {

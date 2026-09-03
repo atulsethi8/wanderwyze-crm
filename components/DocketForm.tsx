@@ -46,6 +46,7 @@ import {
   FormSelect,
 } from "./common";
 import { InvoiceGenerator } from "./InvoiceGenerator";
+import { ZohoInvoicePanel } from "./ZohoInvoicePanel";
 
 const createSector = (seed: Partial<FlightSector> = {}): FlightSector => ({
   id: seed.id || `SEC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -358,6 +359,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [zohoModalOpen, setZohoModalOpen] = useState(false);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [newSupplier, setNewSupplier] = useState<Omit<Supplier, "id">>({
@@ -3001,6 +3003,13 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                   >
                     Generate Invoice
                   </button>
+                  <button
+                    onClick={() => setZohoModalOpen(true)}
+                    disabled={!docket?.id}
+                    className="w-full mt-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                  >
+                    Push to Zoho Books
+                  </button>
                 </div>
               )}
               <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
@@ -3219,6 +3228,16 @@ export const DocketForm: React.FC<DocketFormProps> = ({
           }
           passengers={formState.passengers}
           onClose={() => setInvoiceModalOpen(false)}
+          onSaveInvoice={handleSaveInvoice}
+        />
+      )}
+
+      {zohoModalOpen && docket?.id && (
+        <ZohoInvoicePanel
+          isOpen={zohoModalOpen}
+          docket={{ ...docket, ...formState, id: docket.id } as any}
+          passengers={formState.passengers}
+          onClose={() => setZohoModalOpen(false)}
           onSaveInvoice={handleSaveInvoice}
         />
       )}

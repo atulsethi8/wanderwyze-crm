@@ -23,11 +23,15 @@ export interface ZohoInvoiceSummary {
   invoiceNumber: string;
   /** draft | sent | overdue | paid | partially_paid | void */
   status: string;
+  subTotal?: number;
+  taxTotal?: number;
   total: number;
   balance: number;
   date: string;
   dueDate?: string;
   customerName?: string;
+  /** Direct link to the invoice in Books, for "open in Zoho". */
+  invoiceUrl?: string;
   error?: string;
 }
 

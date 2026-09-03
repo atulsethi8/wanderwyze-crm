@@ -277,3 +277,40 @@ export const buildZohoInvoice = (input: BuildInvoiceInput): ZohoInvoicePayload =
     ...(input.terms ? { terms: input.terms } : {}),
   };
 };
+
+/** State names for a picker, alphabetical. */
+export const STATE_NAMES: string[] = Object.keys(STATE_CODES).sort((a, b) => a.localeCompare(b));
+
+export interface InvoicePreviewTotals {
+  subtotal: number;
+  gstAmount: number;
+  grandTotal: number;
+}
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/**
+ * Estimates what Zoho will compute, so the panel can show a total before the invoice is
+ * actually created. Mirrors buildZohoInvoice's own logic rather than calling the API, using
+ * the known slab percentages (0 / 5 / 18) rather than looking them up by id.
+ *
+ * This is a preview only - the authoritative total is whatever Zoho returns after creation,
+ * since it also applies rounding and account-level settings this does not model.
+ */
+export const previewZohoInvoiceTotals = (
+  input: Pick<BuildInvoiceInput, 'lineItems' | 'serviceCharge' | 'gstMode'>,
+): InvoicePreviewTotals => {
+  const travel = round2(input.lineItems.reduce((sum, item) => sum + (Number(item.rate) || 0) * (Number(item.quantity) || 1), 0));
+  const fee = round2(Number(input.serviceCharge) || 0);
+
+  if (input.gstMode === 'package_5') {
+    const gstAmount = round2(travel * 0.05);
+    return { subtotal: travel, gstAmount, grandTotal: round2(travel + gstAmount) };
+  }
+  if (input.gstMode === 'service_charge_18') {
+    const gstAmount = round2(fee * 0.18);
+    const subtotal = round2(travel + fee);
+    return { subtotal, gstAmount, grandTotal: round2(subtotal + gstAmount) };
+  }
+  return { subtotal: travel, gstAmount: 0, grandTotal: travel };
+};

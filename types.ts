@@ -269,6 +269,20 @@ export interface Invoice {
   companySettings: CompanySettings; // snapshot of settings at time of creation
   terms: string;
   dueDate: string;
+  /**
+   * Present when this invoice was pushed to Zoho Books rather than only recorded here.
+   * `status`/`balance` are a snapshot from the last sync, not necessarily current -
+   * re-sync before relying on them for anything other than display.
+   */
+  zoho?: {
+    invoiceId: string;
+    invoiceNumber: string;
+    status: string;
+    balance: number;
+    invoiceUrl?: string;
+    gstMode: 'package_5' | 'service_charge_18' | 'none';
+    syncedAt: string;
+  };
 }
 
 export interface Docket {

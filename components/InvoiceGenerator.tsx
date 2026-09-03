@@ -3,6 +3,7 @@ import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings 
 import { Customer, CustomerFormData } from '../types/customer';
 import { customerService } from '../services/customerService';
 import { useCompanySettings } from '../hooks';
+import { deriveDocketLineItems, docketServiceCharge } from '../services/docketLineItems';
 import {
   computeInvoiceTotals,
   halveTax,
@@ -134,42 +135,17 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
   useEffect(() => {
     // Only initialize if lineItems is empty (first load) or if docket ID changed
     if (lineItems.length === 0) {
-      const initialLineItems: InvoiceLineItem[] = [];
-      docket.itinerary.flights.forEach(f => {
-          const paxCount = f.passengerDetails.length;
-          if (paxCount > 0) {
-              const totalGross = f.passengerDetails.reduce((sum, pd) => sum + pd.grossBilled, 0);
-              if (totalGross > 0) {
-                initialLineItems.push({
-                    id: `line-${Date.now()}-flight-${f.id}`,
-                    description: `Flights: ${f.airline} (${f.departureAirport}-${f.arrivalAirport}) for ${paxCount} passenger(s)`,
-                    quantity: 1,
-                    rate: totalGross,
-                    isGstApplicable: false,
-                    gstRate: 0,
-                });
-              }
-          }
-      });
-      docket.itinerary.hotels.forEach(h => {
-          if(h.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-hotel-${h.id}`, description: `Hotel: ${h.name}`, quantity: 1, rate: h.grossBilled, isGstApplicable: false, gstRate: 0 });
-      });
-      docket.itinerary.excursions.forEach(a => {
-          if(a.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-excursion-${a.id}`, description: `Excursion: ${a.name}`, quantity: 1, rate: a.grossBilled, isGstApplicable: false, gstRate: 0 });
-      });
-      docket.itinerary.transfers.forEach(t => {
-         if(t.grossBilled > 0) initialLineItems.push({ id: `line-${Date.now()}-transfer-${t.id}`, description: `Transfer: ${t.provider}`, quantity: 1, rate: t.grossBilled, isGstApplicable: false, gstRate: 0 });
-      });
-      // Add Service Charge from itinerary if present
-      if (docket.itinerary.serviceCharge && (docket.itinerary.serviceCharge.grossBilled || 0) > 0) {
-          initialLineItems.push({
-              id: `line-${Date.now()}-service-charge`,
-              description: 'Service Charge',
-              quantity: 1,
-              rate: docket.itinerary.serviceCharge.grossBilled || 0,
-              isGstApplicable: false,
-              gstRate: 0,
-          });
+      const initialLineItems = deriveDocketLineItems(docket);
+      const fee = docketServiceCharge(docket);
+      if (fee > 0) {
+        initialLineItems.push({
+          id: `line-${Date.now()}-service-charge`,
+          description: 'Service Charge',
+          quantity: 1,
+          rate: fee,
+          isGstApplicable: false,
+          gstRate: 0,
+        });
       }
       setLineItems(initialLineItems);
     }
