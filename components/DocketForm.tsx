@@ -44,9 +44,12 @@ import {
   FormInput,
   FormTextarea,
   FormSelect,
+  EmptyState,
+  Badge,
+  Button,
 } from "./common";
 import { InvoiceGenerator } from "./InvoiceGenerator";
-import { ZohoInvoicePanel } from "./ZohoInvoicePanel";
+import { ZohoInvoicePanel, ZohoInvoiceStatusRow } from "./ZohoInvoicePanel";
 
 const createSector = (seed: Partial<FlightSector> = {}): FlightSector => ({
   id: seed.id || `SEC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1449,6 +1452,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     { id: "details", label: "Client Details", icon: Icons.user },
     { id: "itinerary", label: "Itinerary", icon: Icons.plane },
     { id: "payments", label: "Payments", icon: Icons.payment },
+    { id: "invoices", label: "Invoices", icon: Icons.invoice },
     { id: "files", label: "Files & Comments", icon: Icons.file },
   ];
   const summaryItems = {
@@ -2859,6 +2863,87 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                 </div>
               </Section>
             )}
+            {activeTab === "invoices" && (
+              <Section title="Invoices" icon={Icons.invoice}>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-slate-500">
+                    {formState.invoices.length} invoice
+                    {formState.invoices.length === 1 ? "" : "s"} on this docket
+                  </p>
+                  {!isReadOnly && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!docket?.id}
+                        onClick={() => setInvoiceModalOpen(true)}
+                      >
+                        + New Invoice
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={!docket?.id}
+                        onClick={() => setZohoModalOpen(true)}
+                      >
+                        Push to Zoho Books
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {!docket?.id ? (
+                  <EmptyState
+                    title="Save this docket first"
+                    description="Invoices can be created once the docket has been saved."
+                  />
+                ) : formState.invoices.length === 0 ? (
+                  <EmptyState
+                    title="No invoices yet"
+                    description="Generate a local invoice, or push this docket straight to Zoho Books."
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {[...formState.invoices]
+                      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+                      .map((invoice) =>
+                        invoice.zoho ? (
+                          <ZohoInvoiceStatusRow
+                            key={invoice.id}
+                            invoice={invoice}
+                            onSaveInvoice={handleSaveInvoice}
+                          />
+                        ) : (
+                          <div
+                            key={invoice.id}
+                            className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 rounded-lg px-4 py-3"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 text-sm">
+                                  {invoice.invoiceNumber}
+                                </span>
+                                <Badge tone="neutral">local only</Badge>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {formatDate(invoice.date)} · {invoice.billedTo?.name || "No billing name"} ·{" "}
+                                {formatCurrency(invoice.grandTotal)}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setInvoiceModalOpen(true)}
+                            >
+                              Open
+                            </Button>
+                          </div>
+                        ),
+                      )}
+                  </div>
+                )}
+              </Section>
+            )}
             {activeTab === "files" && (
               <>
                 <Section title="Files" icon={Icons.file}>
@@ -2997,18 +3082,12 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                 <div className="bg-slate-50 p-4 rounded-lg shadow-sm">
                   <h3 className="font-semibold mb-3">Actions</h3>
                   <button
-                    onClick={() => setInvoiceModalOpen(true)}
+                    onClick={() => setActiveTab("invoices")}
                     disabled={!docket?.id}
                     className="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-600 disabled:bg-slate-400 disabled:cursor-not-allowed"
                   >
-                    Generate Invoice
-                  </button>
-                  <button
-                    onClick={() => setZohoModalOpen(true)}
-                    disabled={!docket?.id}
-                    className="w-full mt-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-                  >
-                    Push to Zoho Books
+                    Invoices
+                    {formState.invoices.length > 0 ? ` (${formState.invoices.length})` : ""}
                   </button>
                 </div>
               )}

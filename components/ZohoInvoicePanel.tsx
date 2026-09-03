@@ -212,45 +212,6 @@ export const ZohoInvoicePanel: React.FC<ZohoInvoicePanelProps> = ({
     }
   };
 
-  // --- mark sent / re-sync for any invoice already linked to this docket ---------------------
-  const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
-
-  const markSent = async (invoice: Invoice) => {
-    if (!invoice.zoho) return;
-    setBusyInvoiceId(invoice.id);
-    setRowError(null);
-    try {
-      const summary = await zohoService.markSent(invoice.zoho.invoiceId);
-      onSaveInvoice({
-        ...invoice,
-        zoho: { ...invoice.zoho, status: summary.status, balance: summary.balance, syncedAt: new Date().toISOString() },
-      });
-    } catch (err: any) {
-      setRowError(err?.message || 'Could not mark the invoice as sent.');
-    } finally {
-      setBusyInvoiceId(null);
-    }
-  };
-
-  const refreshStatus = async (invoice: Invoice) => {
-    if (!invoice.zoho) return;
-    setBusyInvoiceId(invoice.id);
-    setRowError(null);
-    try {
-      const [summary] = await zohoService.syncStatus([invoice.zoho.invoiceId]);
-      if (summary?.error) throw new Error(summary.error);
-      onSaveInvoice({
-        ...invoice,
-        zoho: { ...invoice.zoho, status: summary.status, balance: summary.balance, syncedAt: new Date().toISOString() },
-      });
-    } catch (err: any) {
-      setRowError(err?.message || 'Could not refresh this invoice from Zoho.');
-    } finally {
-      setBusyInvoiceId(null);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -261,91 +222,32 @@ export const ZohoInvoicePanel: React.FC<ZohoInvoicePanelProps> = ({
             <h4 className="text-label font-semibold uppercase text-ink-subtle">
               Already in Zoho
             </h4>
-            {rowError && (
-              <p className="text-sm text-danger bg-danger-subtle border border-danger-line rounded-lg px-3 py-2">
-                {rowError}
-              </p>
-            )}
             {existing.map((invoice) => (
-              <div
-                key={invoice.id}
-                className="flex flex-wrap items-center justify-between gap-3 border border-line rounded-lg px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-ink text-sm">
-                      {invoice.zoho!.invoiceNumber}
-                    </span>
-                    <Badge tone={statusTone(invoice.zoho!.status)}>{invoice.zoho!.status}</Badge>
-                  </div>
-                  <p className="text-xs text-ink-subtle mt-0.5">
-                    {formatCurrency(invoice.grandTotal)} total ·{' '}
-                    {invoice.zoho!.balance > 0
-                      ? `${formatCurrency(invoice.zoho!.balance)} due`
-                      : 'settled'}{' '}
-                    · synced {formatDate(invoice.zoho!.syncedAt.slice(0, 10))}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {invoice.zoho!.invoiceUrl && (
-                    <a
-                      href={invoice.zoho!.invoiceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-medium text-brand hover:underline"
-                    >
-                      Open in Zoho
-                    </a>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busyInvoiceId === invoice.id}
-                    onClick={() => refreshStatus(invoice)}
-                  >
-                    {busyInvoiceId === invoice.id ? <Spinner size="sm" /> : 'Refresh'}
-                  </Button>
-                  {invoice.zoho!.status === 'draft' && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busyInvoiceId === invoice.id}
-                      onClick={() => markSent(invoice)}
-                    >
-                      Mark as sent
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <ZohoInvoiceStatusRow key={invoice.id} invoice={invoice} onSaveInvoice={onSaveInvoice} />
             ))}
           </div>
         )}
 
         {justCreated ? (
-          <div className="border border-ok-line bg-ok-subtle rounded-lg p-4 space-y-2">
-            <p className="text-sm font-semibold text-ok">
-              Draft {justCreated.zoho!.invoiceNumber} created in Zoho.
-            </p>
-            <p className="text-sm text-ink-muted">
-              Review it in Zoho before sending — nothing has gone to the client yet.
-            </p>
-            <div className="flex gap-2 pt-1">
-              {justCreated.zoho!.invoiceUrl && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => window.open(justCreated.zoho!.invoiceUrl, '_blank')}
-                >
-                  Open in Zoho
-                </Button>
-              )}
-              <Button size="sm" variant="secondary" onClick={() => markSent(justCreated)}>
-                Mark as sent
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setJustCreated(null)}>
-                Create another
-              </Button>
+          <div className="border border-ok-line bg-ok-subtle rounded-lg p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-ok">
+                Draft {justCreated.zoho!.invoiceNumber} created in Zoho.
+              </p>
+              <p className="text-sm text-ink-muted">
+                Review it in Zoho before sending — nothing has gone to the client yet.
+              </p>
             </div>
+            <ZohoInvoiceStatusRow
+              invoice={justCreated}
+              onSaveInvoice={(updated) => {
+                onSaveInvoice(updated);
+                setJustCreated(updated);
+              }}
+            />
+            <Button size="sm" variant="ghost" onClick={() => setJustCreated(null)}>
+              Create another
+            </Button>
           </div>
         ) : (
           <>
@@ -544,5 +446,91 @@ export const ZohoInvoicePanel: React.FC<ZohoInvoicePanelProps> = ({
         )}
       </div>
     </Modal>
+  );
+};
+
+interface ZohoInvoiceStatusRowProps {
+  invoice: Invoice;
+  onSaveInvoice: (invoice: Invoice) => void;
+  /** Compact form for use in list contexts (e.g. the docket's Invoices tab). */
+  compact?: boolean;
+}
+
+/**
+ * One Zoho-linked invoice: status, balance, a link to open it in Books, and the two actions
+ * that change its state - mark sent, and re-sync. Shared by the panel's own "already in
+ * Zoho" list and the docket's Invoices tab, so the two cannot drift into different behaviour
+ * for the same action.
+ */
+export const ZohoInvoiceStatusRow: React.FC<ZohoInvoiceStatusRowProps> = ({
+  invoice,
+  onSaveInvoice,
+  compact = false,
+}) => {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const zoho = invoice.zoho!;
+
+  const run = async (action: () => Promise<ZohoInvoiceSummary>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const summary = await action();
+      if (summary.error) throw new Error(summary.error);
+      onSaveInvoice({
+        ...invoice,
+        zoho: {
+          ...zoho,
+          status: summary.status,
+          balance: summary.balance,
+          syncedAt: new Date().toISOString(),
+        },
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Could not reach Zoho.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className={`border border-line rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} space-y-1`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-ink text-sm">{zoho.invoiceNumber}</span>
+            <Badge tone={statusTone(zoho.status)}>{zoho.status}</Badge>
+          </div>
+          <p className="text-xs text-ink-subtle mt-0.5">
+            {formatCurrency(invoice.grandTotal)} total ·{' '}
+            {zoho.balance > 0 ? `${formatCurrency(zoho.balance)} due` : 'settled'} · synced{' '}
+            {formatDate(zoho.syncedAt.slice(0, 10))}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {zoho.invoiceUrl && (
+            <a
+              href={zoho.invoiceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Open in Zoho
+            </a>
+          )}
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => zohoService.syncStatus([zoho.invoiceId]).then((r) => r[0]))}>
+            {busy ? <Spinner size="sm" /> : 'Refresh'}
+          </Button>
+          {zoho.status === 'draft' && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => zohoService.markSent(zoho.invoiceId))}>
+              Mark as sent
+            </Button>
+          )}
+        </div>
+      </div>
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
   );
 };
