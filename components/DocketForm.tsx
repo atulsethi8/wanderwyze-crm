@@ -1060,12 +1060,18 @@ export const DocketForm: React.FC<DocketFormProps> = ({
 
     try {
       const base64 = await toBase64(file);
-      const uploadedFile: Omit<UploadedFile, "id"> = {
+      const flightId = formState.itinerary.flights[itemIndex]?.id;
+      const uploadedFile: UploadedFile = {
+        id: `FILE-${Date.now()}`,
         name: file.name,
-        type: file.type,
+        type: file.type || "application/pdf",
         size: file.size,
         content: base64,
+        linkedItemId: flightId,
+        linkedItemType: "flight",
       };
+      // Preserve the source document even if AI extraction is unavailable or fails.
+      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
       const prompt =
         "Extract every passenger and every chronological flight sector from this e-ticket. Detect tripType as exactly One Way, Return, or Multi-City. Include PNR and booking ID. Preserve airline and airport codes. Dates must be YYYY-MM-DD and times HH:MM (24-hour). Do not omit connections or the inbound journey.";
       const extractedData = await geminiService.extractDataFromDocument(
@@ -1160,29 +1166,20 @@ export const DocketForm: React.FC<DocketFormProps> = ({
             return flight;
           });
 
-          const flightId = updatedFlights[itemIndex].id;
-          const fileToAdd: UploadedFile = {
-            ...uploadedFile,
-            id: `FILE-${Date.now()}`,
-            linkedItemId: flightId,
-            linkedItemType: "flight",
-          };
-
           return {
             ...prev,
             passengers: updatedGlobalPassengers,
             itinerary: { ...prev.itinerary, flights: updatedFlights },
-            files: [...prev.files, fileToAdd],
           };
         });
       } else {
         alert(
-          "No flight sectors could be detected. Please try another ticket or enter them manually.",
+          "The PDF is attached, but no flight sectors were detected. Please enter them manually and save the docket.",
         );
       }
     } catch (error) {
       console.error("AI parsing error in Flight tab:", error);
-      alert("Failed to parse e-ticket. Please check the file and try again.");
+      alert("The PDF has been attached, but AI could not retrieve its details. You can enter the flight manually and save the docket.");
     } finally {
       setAiLoading(false);
       e.target.value = "";
@@ -1201,12 +1198,14 @@ export const DocketForm: React.FC<DocketFormProps> = ({
 
     try {
       const base64 = await toBase64(file);
-      const uploadedFile: Omit<UploadedFile, "id"> = {
+      const uploadedFile: UploadedFile = {
+        id: `FILE-${Date.now()}`,
         name: file.name,
-        type: file.type,
+        type: file.type || "application/pdf",
         size: file.size,
         content: base64,
       };
+      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
       const prompt =
         "From this hotel voucher, extract every guest full name plus hotel name, city, country, confirmation number, check-in, check-out, number of rooms, room type, meal plan and remarks. Dates must be YYYY-MM-DD.";
       const schema = {
@@ -1291,13 +1290,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({
             paxRefs: passengerIdsForThisHotel,
           };
 
-          const fileToAdd: UploadedFile = {
-            ...uploadedFile,
-            id: `FILE-${Date.now()}`,
-            linkedItemId: newHotelId,
-            linkedItemType: "hotel",
-          };
-
           return {
             ...prev,
             passengers: updatedGlobalPassengers,
@@ -1305,7 +1297,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
               ...prev.itinerary,
               hotels: [...prev.itinerary.hotels, newHotel],
             },
-            files: [...prev.files, fileToAdd],
+            files: prev.files.map((savedFile) => savedFile.id === uploadedFile.id ? { ...savedFile, linkedItemId: newHotelId, linkedItemType: "hotel" } : savedFile),
           };
         });
       } else {
@@ -1314,7 +1306,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     } catch (error) {
       console.error("AI parsing error in Hotel tab:", error);
       alert(
-        "Failed to parse hotel voucher. Please check the file and try again.",
+        "The voucher has been attached, but AI could not retrieve its details. You can enter the hotel manually and save the docket.",
       );
     } finally {
       setAiLoading(false);
@@ -1572,12 +1564,14 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     setAiLoading(true);
     try {
       const base64 = await toBase64(file);
-      const uploadedFile: Omit<UploadedFile, "id"> = {
+      const uploadedFile: UploadedFile = {
+        id: `FILE-${Date.now()}`,
         name: file.name,
-        type: file.type,
+        type: file.type || "application/pdf",
         size: file.size,
         content: base64,
       };
+      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
       const prompt =
         "Extract every passenger and every chronological flight sector from this e-ticket. Detect tripType as exactly One Way, Return, or Multi-City. Include PNR and booking ID. Dates must be YYYY-MM-DD and times HH:MM (24-hour). Do not omit connections or inbound sectors.";
       const extractedData = await geminiService.extractDataFromDocument(
@@ -1670,13 +1664,6 @@ export const DocketForm: React.FC<DocketFormProps> = ({
             sectors,
           );
 
-          const fileToAdd: UploadedFile = {
-            ...uploadedFile,
-            id: `FILE-${Date.now()}`,
-            linkedItemId: newFlightId,
-            linkedItemType: "flight",
-          };
-
           return {
             ...prev,
             passengers: updatedGlobalPassengers,
@@ -1684,7 +1671,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
               ...prev.itinerary,
               flights: [...prev.itinerary.flights, newFlight],
             },
-            files: [...prev.files, fileToAdd],
+            files: prev.files.map((savedFile) => savedFile.id === uploadedFile.id ? { ...savedFile, linkedItemId: newFlightId, linkedItemType: "flight" } : savedFile),
           };
         });
       } else {
@@ -1692,12 +1679,12 @@ export const DocketForm: React.FC<DocketFormProps> = ({
           "AI did not return flight data from the document (Passengers tab upload).",
         );
         alert(
-          "Could not detect flight details from the e-ticket. Please try another file or fill manually.",
+          "The PDF is attached, but flight details were not detected. Please enter them manually and save the docket.",
         );
       }
     } catch (error) {
       console.error("AI parsing error in Passengers tab:", error);
-      alert("Failed to parse e-ticket. Please check the file and try again.");
+      alert("The PDF has been attached, but AI could not retrieve its details. You can enter the flight manually and save the docket.");
     } finally {
       setAiLoading(false);
       e.target.value = "";
