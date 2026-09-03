@@ -193,20 +193,33 @@ const initializeAi = (): GoogleGenAI => {
 export const geminiService = {
   extractDataFromDocument: async (fileContent: string, mimeType: string, schema: any, promptText: string) => {
       const aiInstance = initializeAi();
-      const documentPart = { inlineData: { data: fileContent, mimeType } };
+      const safeMimeType = mimeType || 'application/pdf';
+      const documentPart = { inlineData: { data: fileContent, mimeType: safeMimeType } };
       const textPart = { text: promptText };
+      const parseJson = (text: string) => {
+        const cleaned = (text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace < 0 || lastBrace < firstBrace) throw new Error('AI returned no JSON object');
+        return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      };
 
-      const response = await aiInstance.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [textPart, documentPart] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: schema
-        }
-      });
-
-      const jsonText = response.text.trim();
-      return JSON.parse(jsonText);
+      try {
+        const response = await aiInstance.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [textPart, documentPart] },
+          config: { responseMimeType: "application/json", responseSchema: schema }
+        });
+        return parseJson(response.text || '');
+      } catch (structuredError) {
+        console.warn('Structured document extraction failed; retrying with JSON-only output.', structuredError);
+        const fallback = await aiInstance.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [{ text: `${promptText}\nReturn only one valid JSON object. Do not use markdown fences.` }, documentPart] },
+          config: { responseMimeType: "application/json" }
+        });
+        return parseJson(fallback.text || '');
+      }
   }
 };
 
