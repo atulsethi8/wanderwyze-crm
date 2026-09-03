@@ -4,11 +4,14 @@ import { Lead, LeadStatus } from '../types';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Fall back to placeholders rather than throwing here. This runs while the module graph is
+// still evaluating, so a throw would kill the whole app before React mounts and the config
+// error screen in App.tsx could never render. `usingDefaultKeys` in ../services drives that
+// screen instead, which is the intended way to surface missing credentials.
+const supabase = createClient(
+  supabaseUrl || 'http://localhost:54321',
+  supabaseKey || 'dummy-key',
+);
 
 export interface DatabaseLead {
   id: string;
