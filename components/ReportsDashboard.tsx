@@ -13,6 +13,10 @@ interface ReportsDashboardProps {
   onOpenDocket: (id: string) => void;
 }
 
+type ReportSortKey = 'created' | 'docket' | 'client' | 'agent' | 'destination' | 'departure' | 'billed' | 'paid' | 'profit' | 'balance';
+const getDepartureDate = (d: Docket) => d.itinerary.flights[0]?.sectors?.[0]?.departureDate || d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || '';
+const getDestination = (d: Docket) => d.itinerary.flights[0]?.sectors?.at(-1)?.arrivalAirport || d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+
 const calculateDocketTotals = (docket: Docket) => {
     // Calculate total billed amount including GST from invoices
     let grossBilled = 0;
@@ -54,6 +58,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     start: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
   });
+  const [appliedDateRange, setAppliedDateRange] = useState(dateRange);
+  const [sortConfig, setSortConfig] = useState<{ key: ReportSortKey; direction: 'asc' | 'desc' }>({ key: 'created', direction: 'desc' });
   const [filterType, setFilterType] = useState<'creation' | 'departure'>('departure');
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
@@ -68,8 +74,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   }, [dockets, currentUser]);
 
   const filteredDockets = useMemo(() => {
-    const startDate = new Date(`${dateRange.start}T00:00:00`);
-    const endDate = new Date(`${dateRange.end}T23:59:59`);
+    const startDate = new Date(`${appliedDateRange.start}T00:00:00`);
+    const endDate = new Date(`${appliedDateRange.end}T23:59:59`);
     
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return [];
 
@@ -80,7 +86,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
           dateToCompare = new Date(docket.createdAt); // ISO string creates local time Date object
         }
       } else { // 'departure'
-        const departureDateStr = docket.itinerary.flights[0]?.departureDate || docket.itinerary.hotels[0]?.checkIn;
+        const departureDateStr = getDepartureDate(docket);
         if (departureDateStr) {
           // It's a YYYY-MM-DD string, parse as local time to avoid timezone shift
           dateToCompare = new Date(`${departureDateStr}T00:00:00`);
@@ -97,7 +103,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                 const d = docket.createdAt ? new Date(docket.createdAt) : null;
                 return d && !isNaN(d.getTime()) ? d : null;
             }
-            const dateStr = docket.itinerary.flights[0]?.departureDate || docket.itinerary.hotels[0]?.checkIn;
+            const dateStr = getDepartureDate(docket);
             const d = dateStr ? new Date(`${dateStr}T00:00:00`) : null;
             return d && !isNaN(d.getTime()) ? d : null;
         }
@@ -110,7 +116,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
         
         return dateA.getTime() - dateB.getTime();
     });
-  }, [docketsForReporting, dateRange, filterType]);
+  }, [docketsForReporting, appliedDateRange, filterType]);
 
   const agentPerformanceData = useMemo(() => {
     const data: { [agentId: string]: { name: string; sales: number; profit: number; bookings: number } } = {};
@@ -139,7 +145,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
   const destinationOptions = useMemo(() => {
     const set = new Set<string>();
     docketsByAgent.forEach(d => {
-      const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+      const dest = getDestination(d);
       if (dest) set.add(dest);
     });
     return Array.from(set);
@@ -149,7 +155,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     return docketsByAgent.filter(d => {
       // Destination filter
       if (destinationFilter !== 'all') {
-        const dest = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+        const dest = getDestination(d);
         if (dest !== destinationFilter) return false;
       }
       
@@ -164,6 +170,56 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
       return true;
     });
   }, [docketsByAgent, destinationFilter, balanceFilter]);
+
+  const displayedDockets = useMemo(() => {
+    const valueFor = (d: Docket, key: ReportSortKey): string | number => {
+      const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
+      const paid = (d.payments || []).reduce((sum, payment) => sum + (payment.amount || 0), 0);
+      const departure = getDepartureDate(d);
+      const destination = getDestination(d);
+      const agent = d.agentId ? agents.find(a => a.id === d.agentId)?.name || '' : '';
+      const values: Record<ReportSortKey, string | number> = {
+        created: d.createdAt ? new Date(d.createdAt).getTime() : 0,
+        docket: d.docketNo || d.id,
+        client: d.client.name,
+        agent,
+        destination,
+        departure,
+        billed: grossBilled,
+        paid,
+        profit: netBilled - netCost,
+        balance: Math.max(0, grossBilled - paid),
+      };
+      return values[key];
+    };
+    return [...docketsByAgentDest].sort((a, b) => {
+      const left = valueFor(a, sortConfig.key);
+      const right = valueFor(b, sortConfig.key);
+      const result = typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right));
+      return sortConfig.direction === 'asc' ? result : -result;
+    });
+  }, [docketsByAgentDest, sortConfig, agents]);
+
+  const applyDateRange = (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (!dateRange.start || !dateRange.end) return;
+    if (dateRange.start > dateRange.end) {
+      alert('The From date must be before the To date.');
+      return;
+    }
+    setAppliedDateRange({ ...dateRange });
+  };
+
+  const changeSort = (key: ReportSortKey) => setSortConfig(previous => ({
+    key,
+    direction: previous.key === key && previous.direction === 'asc' ? 'desc' : 'asc',
+  }));
+
+  const sortableHeading = (label: string, key: ReportSortKey) => (
+    <button type="button" onClick={() => changeSort(key)} className="flex items-center gap-1 whitespace-nowrap hover:text-brand-primary">
+      {label}<span aria-hidden="true">{sortConfig.key === key ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '↕'}</span>
+    </button>
+  );
 
   const handleOpen = (id: string) => onOpenDocket(id);
 
@@ -181,14 +237,14 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
       'Balance Due'
     ];
 
-    const rows = docketsByAgentDest.map(d => {
+    const rows = displayedDockets.map(d => {
       const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
       const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
       const profit = (netBilled - netCost);
       const balance = Math.max(0, grossBilled - paid);
-      const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
+      const departureDate = getDepartureDate(d) || 'N/A';
       const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
-      const mainDestination = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+      const mainDestination = getDestination(d);
       const agentName = d.agentId ? agents.find(a => a.id === d.agentId)?.name : 'N/A';
 
       return [
@@ -206,7 +262,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
     });
 
     // Add totals row
-    const totals = docketsByAgentDest.reduce((acc, d) => {
+    const totals = displayedDockets.reduce((acc, d) => {
       const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
       const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
       const profit = (netBilled - netCost);
@@ -243,7 +299,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
       headers,
       rows,
       title: 'Dockets Report',
-      dateRange: `${formatDateForExport(dateRange.start)} to ${formatDateForExport(dateRange.end)} (${filterType})`,
+      dateRange: `${formatDateForExport(appliedDateRange.start)} to ${formatDateForExport(appliedDateRange.end)} (${filterType})`,
       filters: filters || 'All filters'
     };
   };
@@ -317,7 +373,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
         ) : (
           <>
         
-        <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap items-center gap-4">
+        <form onSubmit={applyDateRange} className="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap items-end gap-4">
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-600 shrink-0">Filter by:</span>
                 <div className="flex items-center bg-slate-200 rounded-full p-1">
@@ -355,7 +411,13 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                 onChange={e => setDateRange(p => ({...p, end: e.target.value}))} 
                 icon={Icons.calendar} 
             />
-        </div>
+            <button type="submit" className="px-4 py-2 bg-brand-primary text-white rounded-md hover:opacity-90 font-semibold text-sm">
+              Display on Screen
+            </button>
+            <span className="text-xs text-slate-500 pb-2">
+              Showing {formatDate(appliedDateRange.start)} – {formatDate(appliedDateRange.end)}
+            </span>
+        </form>
         
         {/* Comprehensive Dockets Report */}
         <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
@@ -414,31 +476,31 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket Date</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Docket No</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Client Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Destination</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Departure Date</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Total Billed</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Amount Paid</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Profit</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Balance Due</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Docket Date', 'created')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Docket No', 'docket')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Client Name', 'client')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Agent', 'agent')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Destination', 'destination')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Departure Date', 'departure')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Total Billed', 'billed')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Amount Paid', 'paid')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Profit', 'profit')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{sortableHeading('Balance Due', 'balance')}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {(() => {
                   let sumBilled = 0; let sumPaid = 0; let sumBalance = 0; let sumProfit = 0;
-                  const rows = docketsByAgentDest.map(d => {
+                  const rows = displayedDockets.map(d => {
                     const { grossBilled, netBilled, netCost } = calculateDocketTotals(d);
                     const paid = (d.payments || []).reduce((s,p) => s + (p.amount||0), 0);
                     const profit = (netBilled - netCost);
                     const balance = Math.max(0, grossBilled - paid);
                     sumBilled += grossBilled; sumPaid += paid; sumBalance += balance;
                     sumProfit += profit;
-                    const departureDate = d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || 'N/A';
+                    const departureDate = getDepartureDate(d) || 'N/A';
                     const created = d.createdAt ? (()=>{ const dd=new Date(d.createdAt); const pad=(n:number)=>String(n).padStart(2,'0'); return `${pad(dd.getDate())}/${pad(dd.getMonth()+1)}/${dd.getFullYear()}`; })() : 'N/A';
-                    const mainDestination = d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
+                    const mainDestination = getDestination(d);
                     const agentName = d.agentId ? agents.find(a => a.id === d.agentId)?.name : 'N/A';
                     const rowBg = balance === 0 ? '#d4edda' : '#f8d7da';
                     return (
@@ -467,7 +529,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, age
                   );
                   return rows;
                 })()}
-                {docketsByAgentDest.length === 0 && (
+                {displayedDockets.length === 0 && (
                   <tr><td colSpan={10} className="text-center py-4 text-slate-500">No dockets for this selection.</td></tr>
                 )}
               </tbody>

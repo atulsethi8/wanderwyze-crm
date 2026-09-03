@@ -141,9 +141,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
             (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
           );
         })
-        .sort((a, b) =>
-          (a.travelDate || "9999").localeCompare(b.travelDate || "9999"),
-        ),
+        .sort((a, b) => {
+          const latestA = new Date(a.docket.updatedAt || a.docket.createdAt || 0).getTime();
+          const latestB = new Date(b.docket.updatedAt || b.docket.createdAt || 0).getTime();
+          return latestB - latestA;
+        }),
     [
       dockets,
       agents,
