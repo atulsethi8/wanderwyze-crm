@@ -3,6 +3,13 @@ import { Docket, Passenger, Invoice, InvoiceLineItem, BilledTo, CompanySettings 
 import { Customer, CustomerFormData } from '../types/customer';
 import { customerService } from '../services/customerService';
 import { useCompanySettings } from '../hooks';
+import {
+  computeInvoiceTotals,
+  halveTax,
+  lineNet,
+  lineTax as lineItemTax,
+  lineGross as lineItemGross,
+} from '../services/invoiceTotals';
 import { formatCurrency, formatDate, amountToWords } from '../services';
 import { Icons, FormInput, FormTextarea, FormSelect } from './common';
 import jsPDF from 'jspdf';
@@ -40,10 +47,10 @@ const INDIAN_STATES = [
 
 
 export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, passengers, onClose, onSaveInvoice }) => {
-  const { settings, getNextInvoiceNumber } = useCompanySettings();
+  const { settings, loading: settingsLoading, getNextInvoiceNumber } = useCompanySettings();
 
   // Component State
-  const [invoiceNumber, setInvoiceNumber] = useState(() => generateInvoiceNumber(settings.lastInvoiceNumber));
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [billedToPassengerId, setBilledToPassengerId] = useState<string>('');
   const [billedToDetails, setBilledToDetails] = useState<BilledTo | null>(null);
@@ -88,6 +95,14 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     }
   }, [placeOfSupply, settings.companyState]);
   
+  // Show the number this invoice will actually receive, once the real counter has loaded.
+  // The previous initialiser ran on first render only, so it always displayed a number based
+  // on the placeholder counter of 1000 while saving produced an entirely different one.
+  useEffect(() => {
+    if (settingsLoading || currentInvoiceId) return;
+    setInvoiceNumber(generateInvoiceNumber(settings.lastInvoiceNumber));
+  }, [settingsLoading, settings.lastInvoiceNumber, currentInvoiceId]);
+
   // Calculate Due Date based on terms
   useEffect(() => {
     const date = new Date(invoiceDate);
@@ -302,55 +317,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     }
   };
   
-  const financialTotals = useMemo(() => {
-    const subtotal = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0), 0);
-    
-    let gstAmount = 0;
-    const gstBreakdown: {[rate: string]: { taxableAmount: number, gstValue: number }} = {};
-    
-    if (gstOnTotal) {
-      // Apply GST on total amount
-      gstAmount = subtotal * (gstOnTotalRate / 100);
-      gstBreakdown[gstOnTotalRate] = { taxableAmount: subtotal, gstValue: gstAmount };
-    } else {
-      // Apply GST on individual items
-      gstAmount = lineItems.reduce((sum, item) => {
-          if (item.isGstApplicable && item.rate && item.gstRate) {
-              return sum + ((item.quantity * item.rate) * (item.gstRate / 100));
-          }
-          return sum;
-      }, 0);
-      
-      lineItems.forEach(item => {
-          if(item.isGstApplicable && item.gstRate > 0) {
-              const taxableAmount = item.quantity * item.rate;
-              const itemGst = taxableAmount * (item.gstRate / 100);
-              if (!gstBreakdown[item.gstRate]) {
-                  gstBreakdown[item.gstRate] = { taxableAmount: 0, gstValue: 0 };
-              }
-              gstBreakdown[item.gstRate].taxableAmount += taxableAmount;
-              gstBreakdown[item.gstRate].gstValue += itemGst;
-          }
-      });
-    }
-    
-    const grandTotal = subtotal + gstAmount;
-
-    return { subtotal, gstAmount, grandTotal, gstBreakdown: Object.entries(gstBreakdown) };
-  }, [lineItems, gstOnTotal, gstOnTotalRate, gstType]);
-
-  // Compute effective GST rate across all GST-applicable items
-  const gstTaxableBase = useMemo(() => {
-    return (financialTotals.gstBreakdown || []).reduce((sum, entry) => {
-      const [, info] = entry as [string, { taxableAmount: number; gstValue: number }];
-      return sum + (info?.taxableAmount || 0);
-    }, 0);
-  }, [financialTotals]);
-
-  const effectiveGstRate = useMemo(() => {
-    if (gstTaxableBase <= 0) return 0;
-    return (financialTotals.gstAmount / gstTaxableBase) * 100;
-  }, [financialTotals, gstTaxableBase]);
+  const financialTotals = useMemo(
+    () => computeInvoiceTotals(lineItems, { gstOnTotal, gstOnTotalRate }),
+    [lineItems, gstOnTotal, gstOnTotalRate],
+  );
 
   const formatPercent = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '')}%`;
 
@@ -576,9 +546,14 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     let finalInvoiceNumber = invoiceNumber;
     if (!currentInvoiceId) {
       // This is the first save, generate new invoice number
-      const nextInvoiceNum = await getNextInvoiceNumber();
-      finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
-      setInvoiceNumber(finalInvoiceNumber);
+      try {
+        const nextInvoiceNum = await getNextInvoiceNumber();
+        finalInvoiceNumber = generateInvoiceNumber(nextInvoiceNum - 1);
+        setInvoiceNumber(finalInvoiceNumber);
+      } catch (error: any) {
+        alert(error?.message || 'Could not reserve an invoice number. Please try again.');
+        return;
+      }
     }
     
     const newInvoice: Invoice = {
@@ -718,28 +693,18 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
     setAuditLog(prev => [...prev, `${timestamp}: Edit mode disabled`]);
   };
   const addLineItem = () => {
-      setLineItems(prev => [...prev, { id: `line-${Date.now()}`, description: '', quantity: 1, rate: 0, isGstApplicable: false, gstRate: 0 }]);
+      // The random suffix matters: two items added inside the same millisecond would share an
+      // id, and every edit or delete keyed on that id would then hit both rows.
+      const id = `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      setLineItems(prev => [...prev, { id, description: '', quantity: 1, rate: 0, isGstApplicable: false, gstRate: 0 }]);
   };
   const removeLineItem = (id: string) => {
       setLineItems(prev => prev.filter(item => item.id !== id));
   };
   
-     // Helpers for line totals
-   const lineNet = (item: InvoiceLineItem) => (Number(item.quantity) || 0) * (Number(item.rate) || 0);
-   const lineTax = (item: InvoiceLineItem) => {
-     if (gstOnTotal) {
-       // When GST is applied on total, individual items don't show tax
-       return 0;
-     }
-     return item.isGstApplicable && item.gstRate ? lineNet(item) * (item.gstRate / 100) : 0;
-   };
-   const lineGross = (item: InvoiceLineItem) => {
-     if (gstOnTotal) {
-       // When GST is applied on total, line total is same as net (no individual tax)
-       return lineNet(item);
-     }
-     return lineNet(item) + lineTax(item);
-   };
+  // Per-line figures, bound to the current GST mode.
+  const lineTax = (item: InvoiceLineItem) => lineItemTax(item, gstOnTotal);
+  const lineGross = (item: InvoiceLineItem) => lineItemGross(item, gstOnTotal);
 
   return (
     <div className="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4">
@@ -1297,8 +1262,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                         <th className="text-right py-2 font-semibold text-slate-700">QTY</th>
                         <th className="text-right py-2 font-semibold text-slate-700">UNIT PRICE</th>
                         <th className="text-right py-2 font-semibold text-slate-700">NET COST</th>
+                        {/* "GROSS COST" printed the same figure as NET COST. Replaced with the
+                            line's tax so each column carries distinct information. */}
                         {!gstOnTotal && <th className="text-right py-2 font-semibold text-slate-700">TAX %</th>}
-                        <th className="text-right py-2 font-semibold text-slate-700">GROSS COST</th>
+                        {!gstOnTotal && <th className="text-right py-2 font-semibold text-slate-700">TAX AMOUNT</th>}
                         <th className="text-right py-2 font-semibold text-slate-700">TOTAL</th>
                     </tr>
                 </thead>
@@ -1310,7 +1277,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                              <td className="py-3 text-right text-slate-600">{formatCurrency(item.rate)}</td>
                              <td className="py-3 text-right text-slate-600">{formatCurrency(lineNet(item))}</td>
                              {!gstOnTotal && <td className="py-3 text-right text-slate-600">{item.isGstApplicable ? `${item.gstRate}%` : '0%'}</td>}
-                             <td className="py-3 text-right text-slate-600">{formatCurrency(lineNet(item))}</td>
+                             {!gstOnTotal && <td className="py-3 text-right text-slate-600">{formatCurrency(lineTax(item))}</td>}
                              <td className="py-3 text-right font-semibold text-slate-800">{formatCurrency(lineGross(item))}</td>
                          </tr>
                     ))}
@@ -1324,27 +1291,34 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ docket, pass
                          <span className="text-slate-600">Subtotal:</span>
                          <span className="text-slate-800">{formatCurrency(financialTotals.subtotal)}</span>
                      </div>
-                    {financialTotals.gstAmount > 0 && (
-                        <>
-                            {gstType === 'CGST/SGST' ? (
-                                <>
-                                                                         <div className="flex justify-between py-1">
-                                         <span className="text-slate-600">CGST ({formatPercent(effectiveGstRate / 2)}):</span>
-                                         <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                     </div>
-                                     <div className="flex justify-between py-1">
-                                         <span className="text-slate-600">SGST ({formatPercent(effectiveGstRate / 2)}):</span>
-                                         <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount / 2)}</span>
-                                     </div>
-                                </>
-                            ) : (
-                                                                 <div className="flex justify-between py-1">
-                                     <span className="text-slate-600">IGST ({formatPercent(effectiveGstRate)}):</span>
-                                     <span className="text-slate-800">{formatCurrency(financialTotals.gstAmount)}</span>
-                                 </div>
-                            )}
-                        </>
-                    )}
+                    {/* One row per GST slab. Averaging mixed slabs into a single blended
+                        percentage misstates the tax on the invoice - 5% and 18% items must
+                        be shown as 5% and 18%, never as "11.3%". */}
+                    {financialTotals.gstBreakdown.map(([rate, info]) => {
+                        const numericRate = Number(rate);
+                        if (!(info.gstValue > 0)) return null;
+                        if (gstType === 'CGST/SGST') {
+                            const [cgst, sgst] = halveTax(info.gstValue);
+                            return (
+                                <React.Fragment key={rate}>
+                                    <div className="flex justify-between py-1">
+                                        <span className="text-slate-600">CGST ({formatPercent(numericRate / 2)}):</span>
+                                        <span className="text-slate-800">{formatCurrency(cgst)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1">
+                                        <span className="text-slate-600">SGST ({formatPercent(numericRate / 2)}):</span>
+                                        <span className="text-slate-800">{formatCurrency(sgst)}</span>
+                                    </div>
+                                </React.Fragment>
+                            );
+                        }
+                        return (
+                            <div key={rate} className="flex justify-between py-1">
+                                <span className="text-slate-600">IGST ({formatPercent(numericRate)}):</span>
+                                <span className="text-slate-800">{formatCurrency(info.gstValue)}</span>
+                            </div>
+                        );
+                    })}
                                          <div className="flex justify-between py-2 border-t-2 border-slate-200 font-bold text-lg">
                          <span className="text-slate-800">Grand Total:</span>
                          <span className="text-slate-900">{formatCurrency(financialTotals.grandTotal)}</span>

@@ -405,15 +405,20 @@ export const useDockets = () => {
 
 export const useCompanySettings = () => {
     const [settings, setSettings] = useState<CompanySettings>(DEFAULT_COMPANY_SETTINGS);
+    // Until this clears, `settings` is still DEFAULT_COMPANY_SETTINGS - placeholder company
+    // details and a lastInvoiceNumber of 1000. Anything that numbers an invoice or snapshots
+    // the company onto one must wait, or it will write those placeholders to the database.
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchSettings = async () => {
+          try {
             const { data, error } = await supabase
                 .from('company_settings')
                 .select('settings')
                 .eq('id', 1)
                 .single();
-            
+
             if (data && data.settings) {
                 setSettings(data.settings as unknown as CompanySettings);
             } else if (error && error.code === 'PGRST116') { // 'PGRST116' means no rows returned
@@ -424,6 +429,9 @@ export const useCompanySettings = () => {
             } else if (error) {
                 console.error("Error fetching company settings:", error);
             }
+          } finally {
+            setLoading(false);
+          }
         };
         fetchSettings();
     }, []);
@@ -443,10 +451,14 @@ export const useCompanySettings = () => {
     };
 
     const getNextInvoiceNumber = async () => {
+        // Guard against numbering from the placeholder defaults: reserving a number before the
+        // real counter arrives would write 1001 over a counter that may already be far higher,
+        // handing the same number to several invoices.
+        if (loading) throw new Error('Company settings are still loading. Please try again in a moment.');
         const nextNum = settings.lastInvoiceNumber + 1;
         await updateSettings({ lastInvoiceNumber: nextNum });
         return nextNum;
     };
-    
-    return { settings, updateSettings, getNextInvoiceNumber };
+
+    return { settings, loading, updateSettings, getNextInvoiceNumber };
 };
