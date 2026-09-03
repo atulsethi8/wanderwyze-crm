@@ -2,6 +2,15 @@ import React, { useMemo, useState } from "react";
 import { Agent, BookingStatus, Docket } from "../types";
 import { STATUS_COLORS } from "../constants";
 import { formatCurrency, formatDate } from "../services";
+import { EmptyState } from "./common";
+import {
+  COLUMNS,
+  DEFAULT_SORT,
+  compareRows,
+  nextSort,
+  type SortDirection,
+  type SortKey,
+} from "./dashboardSort";
 
 interface DashboardProps {
   dockets: Docket[];
@@ -104,6 +113,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     [agentFilter, setAgentFilter] = useState("All");
   const [travelFrom, setTravelFrom] = useState(""),
     [travelTo, setTravelTo] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>(DEFAULT_SORT);
+  const toggleSort = (key: SortKey) => setSort((current) => nextSort(current, key));
+
   const rows = useMemo(
     () =>
       dockets
@@ -141,11 +153,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
           );
         })
-        .sort((a, b) => {
-          const latestA = new Date(a.docket.updatedAt || a.docket.createdAt || 0).getTime();
-          const latestB = new Date(b.docket.updatedAt || b.docket.createdAt || 0).getTime();
-          return latestB - latestA;
-        }),
+        .sort((a, b) => compareRows(a, b, sort.key, sort.direction)),
     [
       dockets,
       agents,
@@ -155,6 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       agentFilter,
       travelFrom,
       travelTo,
+      sort,
     ],
   );
   const outstanding = useMemo(
@@ -176,43 +185,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
   );
 
   return (
-    <div className="p-4 sm:p-6 md:p-8">
-      <div className="max-w-[1600px] mx-auto space-y-5">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink tracking-tight">Dashboard</h1>
+          <p className="text-sm text-ink-muted mt-1">
+            An overview of your bookings and what needs attention.
+          </p>
+        </div>
+
+        {/* Stat tiles. The accent bar gives the row a spine without adding colour noise. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            ["Total bookings", dockets.length.toString()],
+            ["Total bookings", dockets.length.toString(), false],
             [
               "Confirmed",
               dockets
                 .filter((d) => d.status === BookingStatus.Confirmed)
                 .length.toString(),
+              false,
             ],
-            ["Travel in 30 days", upcoming.toString()],
-            ["Outstanding", formatCurrency(outstanding)],
-          ].map(([label, value]) => (
+            ["Travel in 30 days", upcoming.toString(), false],
+            ["Outstanding", formatCurrency(outstanding), outstanding > 0],
+          ].map(([label, value, alert]) => (
             <div
-              key={label}
-              className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm"
+              key={label as string}
+              className="relative bg-surface border border-line rounded-xl px-5 py-4 shadow-card overflow-hidden"
             >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                {label}
+              <span
+                className={`absolute inset-y-0 left-0 w-1 ${alert ? "bg-accent" : "bg-line"}`}
+              />
+              <p className="text-label font-semibold uppercase text-ink-subtle">{label}</p>
+              <p
+                className={`mt-1.5 text-[26px] leading-none font-semibold tabular tracking-tight ${
+                  alert ? "text-accent-hover" : "text-ink"
+                }`}
+              >
+                {value}
               </p>
-              <p className="mt-1 text-2xl font-bold text-slate-800">{value}</p>
             </div>
           ))}
         </div>
-        <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 border-b border-slate-200">
+
+        <section className="bg-surface border border-line rounded-xl shadow-card overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-line">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
               <div>
-                <h1 className="text-xl font-bold text-slate-800">
+                <h2 className="text-base font-semibold text-ink tracking-tight">
                   Booking Queue
-                </h1>
-                <p className="text-sm text-slate-500">
+                </h2>
+                <p className="text-sm text-ink-muted mt-0.5">
                   {rows.length} booking{rows.length === 1 ? "" : "s"} shown
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              {/* Segmented control: one bordered group reads as a single choice, where
+                  four separate pills read as four independent toggles. */}
+              <div className="inline-flex bg-canvas border border-line rounded-lg p-0.5">
                 {(
                   [
                     "All Bookings",
@@ -224,7 +252,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <button
                     key={f}
                     onClick={() => setProductFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${productFilter === f ? "bg-brand-primary text-white border-brand-primary" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}
+                    aria-pressed={productFilter === f}
+                    className={`px-3 py-1.5 rounded-[6px] text-sm font-medium transition-colors ${productFilter === f ? "bg-surface text-ink shadow-card" : "text-ink-muted hover:text-ink"}`}
                   >
                     {f}
                   </button>
@@ -236,7 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 aria-label="Filter by status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+                className="w-full border border-line-strong rounded-lg px-3 py-2 text-sm bg-surface text-ink transition-colors hover:border-slate-400 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
               >
                 <option>All</option>
                 {Object.values(BookingStatus).map((s) => (
@@ -247,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 aria-label="Filter by agent"
                 value={agentFilter}
                 onChange={(e) => setAgentFilter(e.target.value)}
-                className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+                className="w-full border border-line-strong rounded-lg px-3 py-2 text-sm bg-surface text-ink transition-colors hover:border-slate-400 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
               >
                 <option value="All">All agents</option>
                 <option value="">Unassigned</option>
@@ -263,7 +292,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 type="date"
                 value={travelFrom}
                 onChange={(e) => setTravelFrom(e.target.value)}
-                className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                className="w-full border border-line-strong rounded-lg px-3 py-2 text-sm bg-surface text-ink transition-colors hover:border-slate-400 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
               />
               <input
                 aria-label="Travel to"
@@ -271,100 +300,119 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 type="date"
                 value={travelTo}
                 onChange={(e) => setTravelTo(e.target.value)}
-                className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                className="w-full border border-line-strong rounded-lg px-3 py-2 text-sm bg-surface text-ink transition-colors hover:border-slate-400 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[1280px] w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          <div className="overflow-x-auto scroll-slim">
+            <table className="min-w-[1280px] w-full">
+              <thead className="bg-canvas border-b border-line">
                 <tr>
-                  {[
-                    "Docket No.",
-                    "PNR / Booking Ref",
-                    "Lead Traveller",
-                    "Travel Date",
-                    "Booking Date",
-                    "Product / Trip Details",
-                    "Status",
-                    "Amount",
-                    "Balance",
-                    "Agent",
-                    "Actions",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide"
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {COLUMNS.map((column) => {
+                    const active = column.sortKey && sort.key === column.sortKey;
+                    return (
+                      <th
+                        key={column.label}
+                        aria-sort={
+                          active
+                            ? sort.direction === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                        className="px-4 py-2.5 text-left text-label font-semibold text-ink-subtle uppercase whitespace-nowrap"
+                      >
+                        {column.sortKey ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(column.sortKey!)}
+                            title={`Sort by ${column.label}`}
+                            className={`group inline-flex items-center gap-1 uppercase transition-colors hover:text-ink ${active ? "text-ink" : ""}`}
+                          >
+                            {column.label}
+                            <span
+                              aria-hidden="true"
+                              className={
+                                active
+                                  ? "text-accent"
+                                  : "text-line-strong group-hover:text-ink-subtle"
+                              }
+                            >
+                              {active ? (sort.direction === "asc" ? "▲" : "▼") : "▾"}
+                            </span>
+                          </button>
+                        ) : (
+                          column.label
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {rows.map((r) => {
                   const s = STATUS_COLORS[r.docket.status];
                   return (
                     <tr
                       key={r.docket.id}
                       onDoubleClick={() => onSelectDocket(r.docket.id)}
-                      className="hover:bg-slate-50 transition-colors"
+                      className="hover:bg-canvas transition-colors cursor-default"
                     >
-                      <td className="px-4 py-3 text-sm font-mono font-semibold text-slate-700">
+                      <td className="px-4 py-3 text-sm font-medium text-ink tabular whitespace-nowrap">
                         {r.docket.docketNo || r.docket.id}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-700">
+                      <td className="px-4 py-3 text-sm text-ink-muted font-medium tabular whitespace-nowrap">
                         {r.bookingRef}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <p className="font-semibold text-slate-800">
+                        <p className="font-medium text-ink">
                           {r.leadTraveller}
                         </p>
                         {r.docket.passengers.length > 1 && (
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-ink-subtle mt-0.5">
                             +{r.docket.passengers.length - 1} traveller
                             {r.docket.passengers.length > 2 ? "s" : ""}
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap tabular">
                         {r.travelDate ? formatDate(r.travelDate) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap tabular">
                         {r.docket.createdAt
                           ? formatDate(r.docket.createdAt.slice(0, 10))
                           : "—"}
                       </td>
                       <td
-                        className="px-4 py-3 text-sm font-medium text-slate-700 max-w-xs truncate"
+                        className="px-4 py-3 text-sm text-ink-muted max-w-xs truncate"
                         title={r.product.text}
                       >
                         {r.product.text}
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${s.bg} ${s.text}`}
+                          className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md ring-1 ring-inset whitespace-nowrap ${s.bg} ${s.text} ${s.ring}`}
                         >
                           {r.docket.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-700 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm font-medium text-ink whitespace-nowrap tabular text-right">
                         {formatCurrency(r.amount)}
                       </td>
                       <td
-                        className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${r.balance > 0 ? "text-orange-600" : "text-emerald-700"}`}
+                        className={`px-4 py-3 text-sm font-semibold whitespace-nowrap tabular text-right ${r.balance > 0 ? "text-accent-hover" : "text-ink-subtle"}`}
                       >
                         {formatCurrency(r.balance)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {r.agent?.name || "Unassigned"}
+                      <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap">
+                        {r.agent?.name || <span className="text-ink-subtle">Unassigned</span>}
                       </td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => onSelectDocket(r.docket.id)}
-                          className="text-brand-primary hover:underline font-semibold text-sm"
+                          className="text-sm font-semibold text-brand hover:text-brand-hover hover:underline"
                         >
-                          View
+                          Open
                         </button>
                       </td>
                     </tr>
@@ -372,11 +420,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 })}
                 {!rows.length && (
                   <tr>
-                    <td
-                      colSpan={11}
-                      className="py-14 text-center text-slate-500"
-                    >
-                      No bookings match these filters.
+                    <td colSpan={COLUMNS.length} className="p-0">
+                      <EmptyState
+                        title="No bookings match these filters"
+                        description="Try clearing the status, agent or travel-date filters, or search for a different traveller."
+                      />
                     </td>
                   </tr>
                 )}

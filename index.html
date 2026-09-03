@@ -11,15 +11,61 @@
         theme: {
           extend: {
             colors: {
-              'brand-primary': '#2563eb', // blue-600
-              'brand-secondary': '#475569', // slate-600
-              'brand-light': '#f1f5f9', // slate-100
-              'status-progress': '#f59e0b', // amber-500
-              'status-confirmed': '#10b981', // emerald-500
-              'status-cancelled': '#ef4444', // red-500
+              // Semantic tokens. Prefer these over raw slate or blue utilities in new work,
+              // so the whole palette can be retuned from this one place.
+              canvas: '#f8fafc',        /* page background */
+              surface: '#ffffff',       /* cards, tables, panels */
+              line: {
+                DEFAULT: '#e2e8f0',     /* hairline borders */
+                strong: '#cbd5e1',      /* input borders, dividers that must read */
+              },
+              ink: {
+                DEFAULT: '#0f172a',     /* primary text */
+                muted: '#475569',       /* secondary text */
+                subtle: '#94a3b8',      /* labels, placeholders */
+              },
+              brand: {
+                DEFAULT: '#2563eb',     /* primary actions */
+                hover: '#1d4ed8',
+                subtle: '#eff6ff',
+              },
+              accent: {
+                DEFAULT: '#d97706',     /* focus rings, highlights, active markers */
+                hover: '#b45309',
+                subtle: '#fffbeb',
+              },
+              nav: {
+                DEFAULT: '#0f172a',     /* sidebar ground */
+                raised: '#1e293b',      /* hover / active row */
+                text: '#94a3b8',
+                active: '#ffffff',
+              },
+              /* Muted status colours - a table full of saturated pills is exhausting
+                 to read across a full shift. */
+              ok: { DEFAULT: '#047857', subtle: '#ecfdf5', line: '#a7f3d0' },
+              warn: { DEFAULT: '#b45309', subtle: '#fffbeb', line: '#fde68a' },
+              danger: { DEFAULT: '#b91c1c', subtle: '#fef2f2', line: '#fecaca' },
+
+              /* Retained so screens not yet redesigned keep working. */
+              'brand-primary': '#2563eb',
+              'brand-secondary': '#475569',
+              'brand-light': '#f1f5f9',
+              'status-progress': '#f59e0b',
+              'status-confirmed': '#10b981',
+              'status-cancelled': '#ef4444',
             },
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
+              sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+            },
+            fontSize: {
+              /* Small, tight label size used for table headers and field labels. */
+              label: ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.05em' }],
+            },
+            boxShadow: {
+              /* Restrained elevation: a hairline plus a soft drop, not a glow. */
+              card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
+              raised: '0 4px 12px -2px rgb(15 23 42 / 0.10), 0 2px 4px -2px rgb(15 23 42 / 0.06)',
+              overlay: '0 20px 40px -12px rgb(15 23 42 / 0.28)',
             },
           },
         },
@@ -32,7 +78,6 @@
     "react": "https://esm.sh/react@^19.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
     "react/": "https://esm.sh/react@^19.1.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.10.0",
     "recharts": "https://esm.sh/recharts@^3.1.0",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.7.0",
     "jspdf": "https://esm.sh/jspdf@^2.5.1",
@@ -41,17 +86,17 @@
   }
 }
 </script>
-</head>
 <style>
   :root {
     --bg: #ffffff;
-    --fg: #0f172a; /* slate-900 */
-    --muted: #f1f5f9; /* slate-100 */
-    --muted-fg: #475569; /* slate-600 */
-    --border: #e2e8f0; /* slate-200 */
+    --fg: #0f172a;
+    --muted: #f1f5f9;
+    --muted-fg: #475569;
+    --border: #e2e8f0;
     --brand-on: #ffffff;
-    --brand-hover: #1d4ed8; /* blue-700 */
+    --brand-hover: #1d4ed8;
   }
+  /* Legacy helpers, still used by screens awaiting the redesign. */
   .var-bg { background-color: var(--bg); }
   .text-fg { color: var(--fg); }
   .text-muted { color: var(--muted-fg); }
@@ -61,8 +106,32 @@
   .var-btn { background-color: var(--muted); color: var(--fg); border: 1px solid var(--border); }
   .text-on-brand { color: var(--brand-on); }
   .hover\:bg-brand-hover:hover { background-color: var(--brand-hover); }
+
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Money and dates line up column-wise only with fixed-width figures. */
+  .tabular { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+  /* One consistent focus treatment across the app, on the accent colour. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid #d97706;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* A quieter scrollbar inside dense panes. */
+  .scroll-slim::-webkit-scrollbar { height: 10px; width: 10px; }
+  .scroll-slim::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+  .scroll-slim::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
+  .scroll-slim::-webkit-scrollbar-track { background: transparent; }
 </style>
-<body class="var-bg text-fg" data-theme="light">
+</head>
+<body class="bg-canvas text-ink">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

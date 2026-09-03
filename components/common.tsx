@@ -3,14 +3,104 @@ import React from 'react';
 
 export const Spinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
   const sizeClasses = {
-    sm: 'w-6 h-6',
-    md: 'w-10 h-10',
-    lg: 'w-16 h-16',
+    sm: 'w-5 h-5 border-2',
+    md: 'w-8 h-8 border-2',
+    lg: 'w-12 h-12 border-[3px]',
   };
   return (
-    <div className={`animate-spin rounded-full border-4 border-slate-300 border-t-brand-primary ${sizeClasses[size]}`}></div>
+    <div className={`animate-spin rounded-full border-line-strong border-t-brand ${sizeClasses[size]}`}></div>
   );
 };
+
+/** A panel. Everything that sits on the canvas should be one of these, not a bare div. */
+export const Card: React.FC<{ children: React.ReactNode; className?: string; padded?: boolean }> = ({
+  children,
+  className = '',
+  padded = true,
+}) => (
+  <section
+    className={`bg-surface border border-line rounded-xl shadow-card ${padded ? 'p-5' : ''} ${className}`}
+  >
+    {children}
+  </section>
+);
+
+/** Section heading with optional supporting line and right-aligned actions. */
+export const SectionHeader: React.FC<{
+  title: string;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+}> = ({ title, subtitle, actions }) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="min-w-0">
+      <h2 className="text-lg font-semibold text-ink tracking-tight">{title}</h2>
+      {subtitle && <p className="text-sm text-ink-muted mt-0.5">{subtitle}</p>}
+    </div>
+    {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+  </div>
+);
+
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+
+const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+  primary: 'bg-brand text-white hover:bg-brand-hover border border-transparent shadow-card',
+  secondary: 'bg-surface text-ink border border-line-strong hover:bg-canvas',
+  ghost: 'bg-transparent text-ink-muted border border-transparent hover:bg-canvas hover:text-ink',
+  danger: 'bg-danger text-white hover:bg-red-800 border border-transparent shadow-card',
+};
+
+export const Button: React.FC<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: ButtonVariant;
+    size?: 'sm' | 'md';
+    icon?: React.ReactNode;
+  }
+> = ({ variant = 'secondary', size = 'md', icon, children, className = '', ...props }) => (
+  <button
+    {...props}
+    className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+      size === 'sm' ? 'text-xs px-2.5 py-1.5' : 'text-sm px-3.5 py-2'
+    } ${BUTTON_VARIANTS[variant]} ${className}`}
+  >
+    {icon}
+    {children}
+  </button>
+);
+
+/** Quiet status chip: a tinted ground with a hairline ring rather than a solid block. */
+export const Badge: React.FC<{
+  children: React.ReactNode;
+  tone?: 'neutral' | 'ok' | 'warn' | 'danger' | 'brand';
+  className?: string;
+}> = ({ children, tone = 'neutral', className = '' }) => {
+  const tones = {
+    neutral: 'bg-canvas text-ink-muted ring-line',
+    ok: 'bg-ok-subtle text-ok ring-ok-line',
+    warn: 'bg-warn-subtle text-warn ring-warn-line',
+    danger: 'bg-danger-subtle text-danger ring-danger-line',
+    brand: 'bg-brand-subtle text-brand ring-blue-200',
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ring-1 ring-inset whitespace-nowrap ${tones[tone]} ${className}`}
+    >
+      {children}
+    </span>
+  );
+};
+
+/** Shown in place of a table or list that has nothing to display. */
+export const EmptyState: React.FC<{
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}> = ({ title, description, action }) => (
+  <div className="py-16 px-6 text-center">
+    <p className="text-sm font-semibold text-ink">{title}</p>
+    {description && <p className="text-sm text-ink-subtle mt-1 max-w-sm mx-auto">{description}</p>}
+    {action && <div className="mt-4 flex justify-center">{action}</div>}
+  </div>
+);
 
 interface ModalProps {
   isOpen: boolean;
@@ -24,41 +114,47 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onClose}>
-      <div className={`bg-white rounded-lg shadow-xl w-full ${width} p-6 m-4 relative transform transition-all duration-300 ease-out`} onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4 border-b pb-3">
-          {title && <h3 className="text-xl font-semibold text-slate-800">{title}</h3>}
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-800">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    <div className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-50 flex justify-center items-center p-4" onClick={onClose}>
+      <div className={`bg-surface rounded-xl shadow-overlay border border-line w-full ${width} m-4 relative`} onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center px-5 py-4 border-b border-line">
+          {title && <h3 className="text-base font-semibold text-ink tracking-tight">{title}</h3>}
+          <button onClick={onClose} aria-label="Close" className="text-ink-subtle hover:text-ink rounded-md p-1 hover:bg-canvas transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
-        <div>{children}</div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
 };
 
+/* Labels sit in the small caps size so a dense form reads as structured rather than shouty,
+   and every control shares one border, radius and disabled treatment. */
+const LABEL = 'block text-label font-semibold uppercase text-ink-subtle mb-1.5';
+const CONTROL =
+  'w-full px-3 py-2 text-sm bg-surface border border-line-strong rounded-lg text-ink placeholder:text-ink-subtle transition-colors hover:border-slate-400 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:bg-canvas disabled:text-ink-subtle disabled:cursor-not-allowed';
+
 export const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string; icon?: React.ReactNode; containerClassName?: string }> = ({ label, containerClassName, icon, ...props }) => (
     <div className={containerClassName}>
-        {label && <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>}
+        {label && <label className={LABEL}>{label}</label>}
         <div className="relative">
-            <input {...props} className={`w-full p-2 border bg-white border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-primary text-slate-900 ${props.readOnly ? 'bg-slate-100' : ''} ${icon ? 'pr-10' : ''}`} />
-            {icon && <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400">{icon}</div>}
+            <input {...props} className={`${CONTROL} ${props.readOnly ? 'bg-canvas' : ''} ${icon ? 'pr-10' : ''}`} />
+            {icon && <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-subtle">{icon}</div>}
         </div>
     </div>
 );
 
 export const FormTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; containerClassName?: string }> = ({ label, containerClassName, ...props }) => (
     <div className={containerClassName}>
-        <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
-        <textarea {...props} className="w-full p-2 border bg-white border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-primary text-slate-900" />
+        <label className={LABEL}>{label}</label>
+        <textarea {...props} className={CONTROL} />
     </div>
 );
 
 export const FormSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; containerClassName?: string }> = ({ label, children, containerClassName, ...props }) => (
     <div className={containerClassName}>
-        <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
-        <select {...props} className="w-full p-2 border bg-white border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-primary text-slate-900">
+        <label className={LABEL}>{label}</label>
+        <select {...props} className={CONTROL}>
             {children}
         </select>
     </div>

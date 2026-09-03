@@ -25,14 +25,18 @@ export const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-        <div className="text-center mb-8">
-            <div className="inline-block bg-brand-primary text-white rounded-full p-3 mb-2">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-            </div>
-            <h1 className="text-3xl font-bold text-slate-800">WanderWyze Docket</h1>
-            <p className="text-slate-500 mt-2">Sign in to manage your travel bookings.</p>
+    // Navy ground with the card floated on it - the sign-in screen sets the tone for the
+    // rest of the app, so it carries the same chrome colour as the sidebar.
+    <div className="min-h-screen bg-nav flex flex-col justify-center items-center p-4">
+      <div className="max-w-[400px] w-full">
+        <div className="flex items-center justify-center gap-2.5 mb-6">
+            <span className="bg-brand text-white font-bold text-sm rounded-lg w-9 h-9 flex items-center justify-center">WD</span>
+            <span className="text-lg font-semibold text-white tracking-tight">WanderWyze Docket</span>
+        </div>
+        <div className="bg-surface rounded-xl shadow-overlay border border-line p-7">
+        <div className="mb-6">
+            <h1 className="text-xl font-semibold text-ink tracking-tight">Sign in</h1>
+            <p className="text-sm text-ink-muted mt-1">Manage your travel bookings and dockets.</p>
         </div>
         
         <form onSubmit={handleLogin}>
@@ -56,7 +60,7 @@ export const LoginPage: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-500 hover:text-slate-700"
+                    className="text-ink-subtle hover:text-ink"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                     {showPassword ? Icons.eyeSlash : Icons.eye}
@@ -64,12 +68,16 @@ export const LoginPage: React.FC = () => {
               }
             />
           </div>
-          {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+          {error && (
+            <p className="mt-4 text-sm text-danger bg-danger-subtle border border-danger-line rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
           <div className="mt-6">
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 disabled:bg-slate-400 flex justify-center items-center"
+              className="w-full bg-brand text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex justify-center items-center shadow-card"
             >
               {loading ? <Spinner size="sm" /> : 'Sign In'}
             </button>
@@ -79,6 +87,7 @@ export const LoginPage: React.FC = () => {
           <button onClick={() => setShowPasswordReset(true)} className="text-sm text-brand-primary hover:underline">
             Forgot Password?
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -150,7 +159,11 @@ export const PasswordResetPage: React.FC<{ onBack?: () => void }> = ({ onBack })
                             }
                            />
                       </div>
-                      {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+                      {error && (
+            <p className="mt-4 text-sm text-danger bg-danger-subtle border border-danger-line rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
                       {message && <p className="text-green-600 text-sm mt-4">{message}</p>}
                       <button type="submit" disabled={loading} className="w-full mt-6 bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-slate-400 flex justify-center">{loading ? <Spinner size="sm"/> : 'Update Password'}</button>
                   </form>
@@ -166,7 +179,11 @@ export const PasswordResetPage: React.FC<{ onBack?: () => void }> = ({ onBack })
             <p className="text-slate-500 text-center mb-4">Enter your email to receive a password reset link.</p>
             <form onSubmit={handleSendLink}>
                 <FormInput label="" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Your Email" required />
-                {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+                {error && (
+            <p className="mt-4 text-sm text-danger bg-danger-subtle border border-danger-line rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
                 {message && <p className="text-green-600 text-sm mt-4">{message}</p>}
                 <button type="submit" disabled={loading} className="w-full mt-6 bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-slate-400 flex justify-center">{loading ? <Spinner size="sm"/> : 'Send Reset Link'}</button>
             </form>

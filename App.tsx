@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth, useDockets } from './hooks';
-import { Header } from './components/Header';
+import { AppShell } from './components/AppShell';
 import { Dashboard } from './components/Dashboard';
 import { DocketForm } from './components/DocketForm';
 import { ReportsDashboard } from './components/ReportsDashboard';
@@ -30,7 +30,7 @@ const FatalConfigError: React.FC = () => {
                     <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                     <h1 className="text-3xl font-bold text-red-400">Action Required: Environment Variables Not Set</h1>
                     <p className="text-slate-300 mt-4 text-lg">
-                        This application cannot connect to its backend services because the required API keys are missing.
+                        This application cannot connect to its database because the required Supabase credentials are missing.
                     </p>
                 </div>
 
@@ -40,12 +40,9 @@ const FatalConfigError: React.FC = () => {
                     </p>
                     <pre className="bg-black text-white p-4 rounded-md overflow-x-auto text-sm">
                         <code>
-{`# Supabase Credentials (User defined prefix, e.g. VITE_)
+{`# Supabase Credentials
 VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-
-# Google Gemini API Key (MUST be named API_KEY)
-API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
 `}
                         </code>
                     </pre>
@@ -205,18 +202,16 @@ const AppContent: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col min-h-screen">
-            <Header 
-                onNewDocket={handleNewDocket} 
-                onNavigate={handleNavigation} 
-                currentUser={currentUser}
-                searchTerm={showSearchInHeader ? searchTerm : ''}
-                onSearchChange={showSearchInHeader ? setSearchTerm : undefined}
-            />
-            <main className="flex-grow">
-                {renderContent()}
-            </main>
-        </div>
+        <AppShell
+            currentUser={currentUser}
+            currentView={currentView}
+            onNavigate={handleNavigation}
+            onNewDocket={handleNewDocket}
+            searchTerm={showSearchInHeader ? searchTerm : ''}
+            onSearchChange={showSearchInHeader ? setSearchTerm : undefined}
+        >
+            {renderContent()}
+        </AppShell>
     );
 };
 

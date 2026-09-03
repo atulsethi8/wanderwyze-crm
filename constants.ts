@@ -1,10 +1,14 @@
 
 import { BookingStatus, CompanySettings, Supplier, Client, Itinerary, Tag, Docket, LeadSource, Agent, AuthUser } from './types';
 
-export const STATUS_COLORS: Record<BookingStatus, { bg: string; text: string; border: string }> = {
-  [BookingStatus.InProgress]: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-500' },
-  [BookingStatus.Confirmed]: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-500' },
-  [BookingStatus.Cancelled]: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-500' },
+/**
+ * Status colours are deliberately low-saturation. A booking table is mostly status pills, and
+ * fully saturated chips turn it into noise; the ring carries the shape, the fill stays quiet.
+ */
+export const STATUS_COLORS: Record<BookingStatus, { bg: string; text: string; border: string; ring: string }> = {
+  [BookingStatus.InProgress]: { bg: 'bg-warn-subtle', text: 'text-warn', border: 'border-warn-line', ring: 'ring-warn-line' },
+  [BookingStatus.Confirmed]: { bg: 'bg-ok-subtle', text: 'text-ok', border: 'border-ok-line', ring: 'ring-ok-line' },
+  [BookingStatus.Cancelled]: { bg: 'bg-danger-subtle', text: 'text-danger', border: 'border-danger-line', ring: 'ring-danger-line' },
 };
 
 export const LEAD_SOURCES: LeadSource[] = Object.values(LeadSource);
