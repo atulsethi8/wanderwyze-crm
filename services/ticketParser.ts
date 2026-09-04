@@ -1,4 +1,5 @@
 import { titleCase, findDates, findTimes } from './parseUtils';
+import { FlightTripType } from '../types';
 
 /**
  * Deterministic e-ticket parsing.
@@ -29,7 +30,7 @@ export interface ParsedPassenger {
 }
 
 export interface ParsedTicket {
-  tripType: string;
+  tripType: FlightTripType;
   pnr: string;
   bookingId: string;
   passengers: ParsedPassenger[];
@@ -244,7 +245,7 @@ const findSectors = (lines: string[]): ParsedSector[] => {
   return sectors;
 };
 
-const detectTripType = (sectors: ParsedSector[]): string => {
+const detectTripType = (sectors: ParsedSector[]): FlightTripType => {
   if (sectors.length <= 1) return 'One Way';
   const first = sectors[0];
   const last = sectors[sectors.length - 1];

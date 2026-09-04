@@ -746,7 +746,13 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     [],
   );
 
-  const addToArray = <K extends keyof Itinerary>(
+  // keyof Itinerary also includes serviceCharge, which holds a single object rather than an
+  // array. addToArray/removeFromArray only ever operate on the four list sections, so K is
+  // restricted to those - keyof Itinerary let TypeScript believe Itinerary[K][0] and
+  // Itinerary[K].filter(...) were valid for every key, including the one that isn't a list.
+  type ItineraryListKey = "flights" | "hotels" | "excursions" | "transfers";
+
+  const addToArray = <K extends ItineraryListKey>(
     category: K,
     newItem: Itinerary[K][0],
   ) => {
@@ -759,7 +765,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     }));
   };
 
-  const removeFromArray = <K extends keyof Itinerary>(
+  const removeFromArray = <K extends ItineraryListKey>(
     category: K,
     index: number,
   ) => {
@@ -1101,15 +1107,8 @@ export const DocketForm: React.FC<DocketFormProps> = ({
               const sectors = extractedData.sectors.map(
                 (sector: Partial<FlightSector>) => createSector(sector),
               );
-              const detectedType: FlightTripType = [
-                "One Way",
-                "Return",
-                "Multi-City",
-              ].includes(extractedData.tripType)
-                ? extractedData.tripType
-                : sectors.length === 1
-                  ? "One Way"
-                  : "Multi-City";
+              // parseETicketText only ever produces one of the three valid trip types.
+              const detectedType: FlightTripType = extractedData.tripType;
               const updatedFlight = syncLegacyFlightFields(
                 {
                   ...flight,
@@ -1560,15 +1559,8 @@ export const DocketForm: React.FC<DocketFormProps> = ({
           const sectors = extractedData.sectors.map(
             (sector: Partial<FlightSector>) => createSector(sector),
           );
-          const detectedType: FlightTripType = [
-            "One Way",
-            "Return",
-            "Multi-City",
-          ].includes(extractedData.tripType)
-            ? extractedData.tripType
-            : sectors.length === 1
-              ? "One Way"
-              : "Multi-City";
+          // parseETicketText only ever produces one of the three valid trip types.
+          const detectedType: FlightTripType = extractedData.tripType;
           const newFlight: Flight = syncLegacyFlightFields(
             {
               id: newFlightId,
