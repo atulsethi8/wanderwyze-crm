@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Docket, BookingStatus } from '../types';
 import { STATUS_COLORS } from '../constants';
 import { formatCurrency, toYYYYMMDD } from '../services';
+import { calculateDocketTotals } from '../services/docketTotals';
 
 interface PaxCalendarProps {
   dockets: Docket[];
@@ -57,15 +58,7 @@ export const PaxCalendar: React.FC<PaxCalendarProps> = ({ dockets, onSelectDocke
           <span className={`absolute top-2 right-2 text-sm font-semibold ${isToday ? 'bg-brand-primary text-white rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-500'}`}>{day}</span>
           <div className="mt-8 space-y-1">
             {todayDockets.map(docket => {
-              const grossBilled = [
-                ...docket.itinerary.flights.flatMap(f => f.passengerDetails.map(pd => pd.grossBilled)),
-                ...docket.itinerary.hotels.map(h => h.grossBilled),
-                ...docket.itinerary.excursions.map(a => a.grossBilled),
-                ...docket.itinerary.transfers.map(t => t.grossBilled),
-              ].reduce((sum, current) => sum + (current || 0), 0);
-
-              const totalPaid = docket.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-              const balanceDue = grossBilled - totalPaid;
+              const { balance: balanceDue } = calculateDocketTotals(docket);
               const hasOutstandingBalance = balanceDue > 0;
 
               return (

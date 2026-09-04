@@ -107,14 +107,12 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
         break;
     }
 
-    // Apply balance filter
+    // Apply balance filter. Payment status is only genuinely known for invoices pushed to
+    // Zoho, which carry a synced balance; invoices recorded only in the CRM have no
+    // per-invoice payment tracking (payments sit on the docket, unallocated), so they cannot
+    // be claimed as outstanding either way and are excluded rather than guessed at.
     if (balanceFilter === 'outstanding') {
-      filtered = filtered.filter(invoice => {
-        // For invoices, we'll consider them outstanding if they have a balance due
-        // This would typically be based on payment status, but for now we'll show all invoices
-        // You can modify this logic based on your payment tracking system
-        return true; // Show all invoices for now
-      });
+      filtered = filtered.filter(invoice => (invoice.zoho?.balance ?? 0) > 0);
     }
 
     return filtered;
@@ -206,7 +204,7 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
       filterType === 'monthly' && selectedMonth ? `Month: ${selectedMonth}` : null,
       filterType === 'quarterly' && selectedQuarter && selectedYear ? `Quarter: Q${selectedQuarter} ${selectedYear}` : null,
       filterType === 'yearly' && selectedYear ? `Year: ${selectedYear}` : null,
-      balanceFilter === 'outstanding' ? 'Outstanding Balance Only' : null,
+      balanceFilter === 'outstanding' ? 'Outstanding only (Zoho-tracked invoices)' : null,
       searchQuery ? `Search: ${searchQuery}` : null
     ].filter(Boolean).join(', ');
 
@@ -476,7 +474,7 @@ const InvoiceReportPage: React.FC<InvoiceReportPageProps> = ({ onOpenDocket }) =
                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
              >
                <option value="all">All Invoices</option>
-               <option value="outstanding">Outstanding Balance</option>
+               <option value="outstanding">Outstanding (Zoho-tracked)</option>
              </select>
            </div>
          </div>

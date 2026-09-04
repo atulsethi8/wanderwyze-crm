@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Agent, BookingStatus, Docket } from "../types";
 import { STATUS_COLORS } from "../constants";
 import { formatCurrency, formatDate } from "../services";
+import { calculateDocketTotals } from "../services/docketTotals";
 import { EmptyState } from "./common";
 import {
   COLUMNS,
@@ -21,21 +22,8 @@ interface DashboardProps {
 type ProductFilter = "All Bookings" | "Flights" | "Hotels" | "Packages";
 
 const money = (d: Docket) => {
-  const amount = d.invoices?.length
-    ? d.invoices.reduce((s, i) => s + (i.grandTotal || 0), 0)
-    : [
-        ...d.itinerary.flights.flatMap((f) =>
-          f.passengerDetails.map((p) => p.grossBilled || 0),
-        ),
-        ...d.itinerary.hotels.map((h) => h.grossBilled || 0),
-        ...d.itinerary.excursions.map((e) => e.grossBilled || 0),
-        ...d.itinerary.transfers.map((t) => t.grossBilled || 0),
-        d.itinerary.serviceCharge?.grossBilled || 0,
-      ].reduce((s, v) => s + v, 0);
-  return {
-    amount,
-    balance: amount - d.payments.reduce((s, p) => s + (p.amount || 0), 0),
-  };
+  const { grossBilled, balance } = calculateDocketTotals(d);
+  return { amount: grossBilled, balance };
 };
 const travelDate = (d: Docket) =>
   [

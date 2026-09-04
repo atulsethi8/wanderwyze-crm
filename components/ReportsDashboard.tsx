@@ -6,6 +6,7 @@ import { FormInput, Icons } from './common';
 import { useAuth } from '../hooks';
 import InvoiceReportPage from './InvoiceReportPage';
 import { exportToExcel, exportToPDF, formatCurrencyForExport, formatDateForExport, ExportData } from '../services/exportService';
+import { calculateDocketTotals } from '../services/docketTotals';
 
 interface ReportsDashboardProps {
   dockets: Docket[];
@@ -16,40 +17,6 @@ interface ReportsDashboardProps {
 type ReportSortKey = 'created' | 'docket' | 'client' | 'agent' | 'destination' | 'departure' | 'billed' | 'paid' | 'profit' | 'balance';
 const getDepartureDate = (d: Docket) => d.itinerary.flights[0]?.sectors?.[0]?.departureDate || d.itinerary.flights[0]?.departureDate || d.itinerary.hotels[0]?.checkIn || '';
 const getDestination = (d: Docket) => d.itinerary.flights[0]?.sectors?.at(-1)?.arrivalAirport || d.itinerary.flights[0]?.arrivalAirport || d.itinerary.hotels[0]?.name || 'N/A';
-
-const calculateDocketTotals = (docket: Docket) => {
-    // Calculate total billed amount including GST from invoices
-    let grossBilled = 0;
-    let netBilled = 0; // Net amount before GST
-    
-    if (docket.invoices && docket.invoices.length > 0) {
-        // If invoices exist, use the grand total from invoices (includes GST)
-        grossBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
-        // Calculate net billed from invoices (before GST) - use subtotal directly
-        netBilled = docket.invoices.reduce((sum, invoice) => sum + invoice.subtotal, 0);
-    } else {
-        // Fallback to itinerary gross billed if no invoices
-        const allPayableItems = [
-            ...docket.itinerary.flights.flatMap(f => f.passengerDetails),
-            ...docket.itinerary.hotels,
-            ...docket.itinerary.excursions,
-            ...docket.itinerary.transfers,
-        ];
-        grossBilled = allPayableItems.reduce((acc, item) => acc + (item.grossBilled || 0), 0);
-        netBilled = grossBilled; // No GST in itinerary items
-    }
-
-    // Calculate net cost from itinerary items
-    const allPayableItems = [
-        ...docket.itinerary.flights.flatMap(f => f.passengerDetails),
-        ...docket.itinerary.hotels,
-        ...docket.itinerary.excursions,
-        ...docket.itinerary.transfers,
-    ];
-    const netCost = allPayableItems.reduce((acc, item) => acc + (item.netCost || 0), 0);
-
-    return { grossBilled, netBilled, netCost };
-};
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ dockets, agents, onOpenDocket }) => {
   const { currentUser } = useAuth();
