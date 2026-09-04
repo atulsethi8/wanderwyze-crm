@@ -34,6 +34,15 @@ const statusTone = (status: string): 'neutral' | 'ok' | 'warn' | 'danger' => {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * Drops a leading salutation before searching Zoho. Docket client names are typed by agents
+ * and commonly include one ("Mr Yogesh Madnani"), but Zoho's contact_name_contains search is
+ * a plain substring match, and contacts in this org are stored without one ("Yogesh Madnani").
+ * Left in, the salutation makes an exact-name match invisible to the search.
+ */
+const stripSalutation = (name: string) =>
+  name.replace(/^(mr|mrs|ms|miss|mx|dr|prof|shri|smt|m\/s)\.?\s+/i, '').trim();
+
 const buildLocalInvoiceId = () => `ZOHO-LOCAL-${Date.now()}`;
 
 /** Turns a Zoho summary into the CRM's own Invoice record, so it lives in docket.invoices
@@ -93,7 +102,7 @@ export const ZohoInvoicePanel: React.FC<ZohoInvoicePanelProps> = ({
   const existing = useMemo(() => docket.invoices.filter((inv) => inv.zoho), [docket.invoices]);
 
   // --- customer search -------------------------------------------------------------------
-  const [customerQuery, setCustomerQuery] = useState(docket.client.name || '');
+  const [customerQuery, setCustomerQuery] = useState(stripSalutation(docket.client.name || ''));
   const [customerResults, setCustomerResults] = useState<ZohoContact[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -306,8 +315,11 @@ export const ZohoInvoicePanel: React.FC<ZohoInvoicePanelProps> = ({
                     customerResults.length === 0 &&
                     !searchError && (
                       <p className="text-xs text-ink-subtle mt-1">
-                        No matching contact in Zoho. Create it there first — this does not
-                        create contacts automatically.
+                        No contact matched "{customerQuery.trim()}". Search is an exact
+                        substring match against the name in Zoho — try a shorter piece of the
+                        name (e.g. just the surname), or check the spelling. If the contact
+                        genuinely isn't in Zoho, create it there first; this does not create
+                        contacts automatically.
                       </p>
                     )}
                 </div>
