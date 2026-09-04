@@ -10,11 +10,12 @@ import { createClient } from '@supabase/supabase-js';
  *
  * Required Netlify environment variables:
  *   ZOHO_ORG_ID, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN,
- *   ZOHO_ACCOUNTS_HOST (https://accounts.zoho.com), ZOHO_API_HOST (https://www.zohoapis.com)
+ *   ZOHO_ACCOUNTS_HOST, ZOHO_API_HOST
  *
- * The hosts are configurable because the data centre is per-organisation: this org lives on
- * the US centre despite being an Indian business, and a mismatch returns INVALID_TOKEN,
- * which reads like a credentials failure but is actually routing.
+ * The hosts are configurable because the data centre is per-organisation (this org is on
+ * the US centre, not .in, despite being an Indian business - check ZOHO_ACCOUNTS_HOST in
+ * .env.local or the Netlify UI if unsure). A data-centre mismatch fails with INVALID_TOKEN,
+ * which reads like a credentials problem but is actually routing.
  */
 
 const json = (statusCode: number, body: unknown) => ({

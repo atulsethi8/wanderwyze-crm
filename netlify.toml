@@ -5,6 +5,13 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # These four are not sensitive on their own: ORG_ID and CLIENT_ID are meaningless
+  # without ZOHO_CLIENT_SECRET, and the two hosts are Zoho's public API endpoints,
+  # identical for every customer on the same data centre. All four appear as literal
+  # values in comments and in zoho-setup.mjs's data-centre list, which otherwise trips
+  # the secrets scanner. ZOHO_CLIENT_SECRET and ZOHO_REFRESH_TOKEN stay unlisted, so a
+  # real leak of either is still caught.
+  SECRETS_SCAN_OMIT_KEYS = "ZOHO_ORG_ID,ZOHO_CLIENT_ID,ZOHO_ACCOUNTS_HOST,ZOHO_API_HOST"
 
 [[redirects]]
   from = "/*"
