@@ -70,6 +70,7 @@ export interface Lead {
     returnDate: string;
   };
   numberOfPax: number;
+  numberOfNights: number;
   // Day-wise itinerary tracking
   itinerary: {
     day1?: string;

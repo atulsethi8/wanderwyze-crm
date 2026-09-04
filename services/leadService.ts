@@ -33,7 +33,7 @@ export interface DatabaseLead {
     returnDate: string;
   };
   number_of_pax: number;
-  number_of_nights: number; // Added
+  number_of_nights: number;
   created_at: string;
   updated_at: string;
 }
@@ -83,7 +83,7 @@ const transformDatabaseLeadToLead = (dbLead: DatabaseLead, itinerary: DatabaseIt
     notes: dbLead.notes,
     travelDates: dbLead.travel_dates,
     numberOfPax: dbLead.number_of_pax,
-    numberOfNights: dbLead.number_of_nights, // Added
+    numberOfNights: dbLead.number_of_nights,
     itinerary: itineraryMap,
     quotation: {
       flights: quotation?.flights || 0,
@@ -121,7 +121,7 @@ const transformLeadToDatabaseFormat = (lead: Omit<Lead, 'id'>) => {
     notes: leadData.notes,
     travel_dates: leadData.travelDates,
     number_of_pax: leadData.numberOfPax,
-    number_of_nights: leadData.numberOfNights // Added
+    number_of_nights: leadData.numberOfNights
   };
 };
 
@@ -332,41 +332,6 @@ export const leadService = {
       if (error) throw error;
     } catch (error) {
       console.error('Error deleting lead:', error);
-      throw error;
-    }
-  },
-
-  // Get leads by status
-  async getLeadsByStatus(status: LeadStatus): Promise<Lead[]> {
-    try {
-      const { data: leads, error: leadsError } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('status', status)
-        .order('created_at', { ascending: false });
-
-      if (leadsError) throw leadsError;
-
-      if (!leads || leads.length === 0) return [];
-
-      const leadIds = leads.map(lead => lead.id);
-
-      // Get itinerary and quotation for these leads
-      const [itineraryResult, quotationResult] = await Promise.all([
-        supabase.from('lead_itinerary').select('*').in('lead_id', leadIds),
-        supabase.from('lead_quotation').select('*').in('lead_id', leadIds)
-      ]);
-
-      if (itineraryResult.error) throw itineraryResult.error;
-      if (quotationResult.error) throw quotationResult.error;
-
-      return leads.map(lead => {
-        const leadItinerary = itineraryResult.data?.filter(item => item.lead_id === lead.id) || [];
-        const leadQuotation = quotationResult.data?.find(item => item.lead_id === lead.id) || null;
-        return transformDatabaseLeadToLead(lead, leadItinerary, leadQuotation);
-      });
-    } catch (error) {
-      console.error('Error fetching leads by status:', error);
       throw error;
     }
   }

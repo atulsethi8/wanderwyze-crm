@@ -1,60 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons, Modal, Spinner, FormInput, FormTextarea, FormSelect } from './common';
 import { leadService } from '../services/leadService';
+import { Lead, LeadStatus } from '../types';
 
-export enum LeadStatus {
-  Cold = 'cold',
-  Warm = 'warm',
-  Final = 'final'
-}
-
-export interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  company?: string;
-  source: string;
-  status: LeadStatus;
-  description: string;
-  assignedTo: string;
-  expectedValue: number;
-  createdDate: string;
-  lastContactDate?: string;
-  nextFollowUpDate?: string;
-  notes: string;
-  // Travel details
-  travelDates: {
-    departureDate: string;
-    returnDate: string;
-  };
-  numberOfPax: number;
-  numberOfNights: number; // Added
-  // New fields for itinerary and quotation
-  itinerary: {
-    day1?: string;
-    day2?: string;
-    day3?: string;
-    day4?: string;
-    day5?: string;
-    day6?: string;
-    day7?: string;
-    day8?: string;
-    day9?: string;
-    day10?: string;
-  };
-  quotation: {
-    flights: number;
-    hotels: number;
-    excursions: number;
-    transfers: number;
-    total: number;
-  };
-}
-
-interface LeadsPipelineProps {
-  onConvertToDocket: (lead: Lead) => void;
-}
+/** Nights between two dates, floored at zero for an incomplete or inverted range. */
+const calculateNights = (departureDate: string, returnDate: string): number => {
+  if (!departureDate || !returnDate) return 0;
+  const departure = new Date(departureDate);
+  const returnDateObj = new Date(returnDate);
+  const diffTime = returnDateObj.getTime() - departure.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+};
 
 const LeadCard: React.FC<{ lead: Lead; onEdit: (lead: Lead) => void; onDelete: (id: string) => void }> = ({ lead, onEdit, onDelete }) => {
   // Helper function to format date to dd/mm/yyyy
@@ -174,7 +131,7 @@ const AddLeadModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (le
       returnDate: ''
     },
     numberOfPax: 1,
-    numberOfNights: 0, // Added
+    numberOfNights: 0,
     itinerary: {},
     quotation: {
       flights: 0,
@@ -188,24 +145,14 @@ const AddLeadModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (le
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [numberOfDays, setNumberOfDays] = useState(5);
 
-  // Helper function to calculate number of nights
-  const calculateNights = (departureDate: string, returnDate: string): number => {
-    if (!departureDate || !returnDate) return 0;
-    const departure = new Date(departureDate);
-    const returnDateObj = new Date(returnDate);
-    const diffTime = returnDateObj.getTime() - departure.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     // Calculate total quotation
     const total = formData.quotation.flights + formData.quotation.hotels + formData.quotation.excursions + formData.quotation.transfers;
     const updatedFormData = { ...formData, quotation: { ...formData.quotation, total } };
-    
+
     await onSave(updatedFormData);
     setIsSubmitting(false);
     onClose();
@@ -450,16 +397,6 @@ const EditLeadModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (l
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [numberOfDays, setNumberOfDays] = useState(5);
 
-  // Helper function to calculate number of nights
-  const calculateNights = (departureDate: string, returnDate: string): number => {
-    if (!departureDate || !returnDate) return 0;
-    const departure = new Date(departureDate);
-    const returnDateObj = new Date(returnDate);
-    const diffTime = returnDateObj.getTime() - departure.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
-
   useEffect(() => {
     if (lead) {
       setFormData(lead);
@@ -489,7 +426,7 @@ const EditLeadModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (l
     }) : null);
   };
 
-  const updateQuotation = (field: keyof typeof formData!.quotation, value: number) => {
+  const updateQuotation = (field: keyof Lead['quotation'], value: number) => {
     if (!formData) return;
     setFormData(prev => prev ? ({
       ...prev,
@@ -719,7 +656,7 @@ const EditLeadModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (l
   );
 };
 
-export const LeadsPipeline: React.FC<LeadsPipelineProps> = ({ onConvertToDocket }) => {
+export const LeadsPipeline: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);

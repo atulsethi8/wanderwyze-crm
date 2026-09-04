@@ -191,11 +191,7 @@ const AppContent: React.FC = () => {
             case 'customers':
                 return <CustomerManagementPage />;
             case 'leads':
-                return <LeadsPipeline onConvertToDocket={(lead) => {
-                    // TODO: Implement lead to docket conversion
-                    console.log('Converting lead to docket:', lead);
-                    handleNavigation('form');
-                }} />;
+                return <LeadsPipeline />;
             default:
                 return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} searchTerm={searchTerm} />;
         }
