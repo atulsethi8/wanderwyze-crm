@@ -230,5 +230,36 @@ check('Coded voucher meal code HB', v2?.hotel.mealPlan, 'Half Board');
 
 check('Vague voucher -> null', parseHotelVoucherText(vagueVoucher), null);
 
+// TripJack, as pdf.js actually reads it: an account-number watermark through every line, an
+// unlabelled property name, dates wrapped across two lines, and the agency's own address
+// labelled "Address" in the header.
+const tripjackVoucher = [
+  '5', '5113728', 'wander wyze holidays', '51137285', 'Mobile : 9718010101', '51137285',
+  'Address : H 4-28, FLAT NO. 3, BENGALI COLONY, MAHAVIR 51137285', '51137285',
+  'ENCLAVE,NEW DELHI,Delhi,Delhi,India 51137285', '37285',
+  'Booking Vouchered  51137285', 'Booking ID : TJ2017187443412  51137285', '51137285', '51137285',
+  'Grand Hyatt Mumbai Hotel & Residences', '51137285',
+  'Bandra Kurla Complex vicinity 51137285  51137285',
+  'O ff Western Express Highway, Vakola  51137285',
+  'Mumbai , Maharashtra , India. Postal Code: 400055  511372', '51137285',
+  'Check in  Check out  Total Rooms  Total Guests  Total Stay', '51137285',
+  '17-09-  51137285 19-09-  1  2 Adults  2 Night(s)', '51137285', '2026  2026', '51137285',
+  '3:00 PM  12:00 PM', '1137285  51137285',
+  'Apartment, 1 Bedroom 51137285  Incl : Breakfast  Total Guest: 2 Adult',
+  'Name : Mr TEST GUEST 51137285', '51137285  51', 'Special request(s)  51137285  Add New', '51137',
+  'Fees', 'Optional : Fee for buffet breakfast: approximately INR 1450 per person 51137285',
+  '51137285', '51137285', '51137285', '5113',
+].join('\n');
+
+const v3 = parseHotelVoucherText(tripjackVoucher);
+check('TripJack unlabelled name', v3?.hotel.name, 'Grand Hyatt Mumbai Hotel & Residences');
+check('TripJack wrapped dates', v3 && [v3.hotel.checkIn, v3.hotel.checkOut], ['2026-09-17', '2026-09-19']);
+check('TripJack booking ID', v3?.hotel.confirmationNumber, 'TJ2017187443412');
+check('TripJack hotel city, not agency address', v3 && [v3.hotel.city, v3.hotel.country], ['Mumbai', 'India']);
+check('TripJack room type', v3?.hotel.roomType, 'Apartment, 1 Bedroom');
+check('TripJack meal plan', v3?.hotel.mealPlan, 'Bed & Breakfast');
+check('TripJack rooms', v3?.hotel.numberOfRooms, 1);
+check('TripJack guest', v3?.passengers.map((g) => g.fullName), ['Test Guest']);
+
 console.log(failures ? `\n${failures} FAILING assertion(s)` : '\nAll assertions passed');
 process.exit(failures ? 1 : 0);
