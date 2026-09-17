@@ -50,6 +50,7 @@ import {
 } from "./common";
 import { InvoiceGenerator } from "./InvoiceGenerator";
 import { ZohoInvoicePanel, ZohoInvoiceStatusRow } from "./ZohoInvoicePanel";
+import { billableInvoices } from "../services/docketTotals";
 
 const createSector = (seed: Partial<FlightSector> = {}): FlightSector => ({
   id: seed.id || `SEC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -851,21 +852,14 @@ export const DocketForm: React.FC<DocketFormProps> = ({
       grossBilled: formState.itinerary.serviceCharge?.grossBilled || 0,
     };
 
-    // If invoices exist, use their subtotal (pre-GST) as the billed base;
-    // otherwise, fall back to itinerary gross billed sums.
-    const invoicesSubtotal =
-      formState.invoices && formState.invoices.length > 0
-        ? formState.invoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
-        : 0;
-
-    const itineraryGrossTotal =
+    // The itinerary is the billed base. Invoices only document it, so adding their
+    // subtotals together double counts a docket that has been invoiced twice.
+    const grandTotalGross =
       flightsTotal.grossBilled +
       hotelsTotal.grossBilled +
       excursionsTotal.grossBilled +
       transfersTotal.grossBilled +
       serviceChargeTotals.grossBilled;
-    const grandTotalGross =
-      invoicesSubtotal > 0 ? invoicesSubtotal : itineraryGrossTotal;
     const grandTotalNet =
       flightsTotal.netCost +
       hotelsTotal.netCost +
@@ -877,12 +871,11 @@ export const DocketForm: React.FC<DocketFormProps> = ({
       0,
     );
 
-    // Calculate total GST from saved invoices
-    const totalGST =
-      formState.invoices?.reduce(
-        (sum, invoice) => sum + (invoice.gstAmount || 0),
-        0,
-      ) || 0;
+    // GST from the invoices that count, skipping superseded and voided ones.
+    const totalGST = billableInvoices(formState.invoices).reduce(
+      (sum, invoice) => sum + (invoice.gstAmount || 0),
+      0,
+    );
 
     // Calculate grand total including GST
     const grandTotalWithGST = grandTotalGross + totalGST;

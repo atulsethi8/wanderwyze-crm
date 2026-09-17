@@ -41,24 +41,43 @@ check('profit nets off the fee cost', withFeeCost.profit, 10600);
 
 check('absent service charge is simply zero', calculateDocketTotals(docket({ flights: [flight(90000, 100000)] })).grossBilled, 100000);
 
-// --- invoices win over the itinerary estimate ----------------------------------
-console.log('\n--- invoices take precedence ---');
+// --- invoices add GST, never a second copy of the itinerary ------------------------
+// The bug behind this section: a docket with one Rs 56,388 hotel and two saved invoices
+// showed a grand total of Rs 1,12,876, because every invoice's subtotal was summed.
+console.log('\n--- invoices ---');
+const hotelInvoice = (extra = {}) => ({ subtotal: 56388, gstAmount: 0, grandTotal: 56388, ...extra });
+const twice = calculateDocketTotals(
+  docket({ hotels: [item(52388, 56388)], invoices: [hotelInvoice(), hotelInvoice({ gstAmount: 18, grandTotal: 56406 })] }),
+);
+check('two invoices for the same hotel are not double counted', twice.netBilled, 56388);
+check('profit is the hotel margin', twice.profit, 4000);
+
 const invoiced = calculateDocketTotals(
   docket({
     flights: [flight(90000, 100000)],
     serviceCharge: { netCost: 0, grossBilled: 1000 },
-    invoices: [{ grandTotal: 270600, subtotal: 270420 }],
+    invoices: [{ subtotal: 101000, gstAmount: 180, grandTotal: 101180 }],
   }),
 );
-check('gross comes from the invoice', invoiced.grossBilled, 270600);
-check('net billed excludes GST', invoiced.netBilled, 270420);
-check('cost still comes from the itinerary', invoiced.netCost, 90000);
-check('profit uses net billed, not gross', invoiced.profit, 180420);
+check('GST from the invoice is added to gross', invoiced.grossBilled, 101180);
+check('net billed excludes GST', invoiced.netBilled, 101000);
+check('profit excludes GST', invoiced.profit, 11000);
 
+const zohoInvoice = (gstAmount, status = 'sent') => ({ subtotal: 1000, gstAmount, grandTotal: 1000 + gstAmount, zoho: { status } });
 check(
-  'several invoices are summed',
-  calculateDocketTotals(docket({ invoices: [{ grandTotal: 100, subtotal: 90 }, { grandTotal: 200, subtotal: 180 }] })).grossBilled,
-  300,
+  'a Zoho invoice supersedes CRM-only invoices',
+  calculateDocketTotals(docket({ hotels: [item(0, 1000)], invoices: [{ subtotal: 1000, gstAmount: 50 }, zohoInvoice(180)] })).gst,
+  180,
+);
+check(
+  'voided Zoho invoices are ignored',
+  calculateDocketTotals(docket({ hotels: [item(0, 1000)], invoices: [zohoInvoice(180, 'void'), zohoInvoice(50)] })).gst,
+  50,
+);
+check(
+  'CRM-only invoices count when there is no Zoho invoice',
+  calculateDocketTotals(docket({ hotels: [item(0, 1000)], invoices: [{ subtotal: 1000, gstAmount: 50 }] })).grossBilled,
+  1050,
 );
 
 // --- balance --------------------------------------------------------------------
@@ -77,7 +96,7 @@ check('overpayment stays negative', overpaid.balance, -250);
 // --- resilience against partial records ------------------------------------------
 console.log('\n--- missing and malformed data ---');
 check('empty docket totals to zero', calculateDocketTotals(docket()), {
-  grossBilled: 0, netBilled: 0, netCost: 0, paid: 0, balance: 0, profit: 0,
+  grossBilled: 0, netBilled: 0, gst: 0, netCost: 0, paid: 0, balance: 0, profit: 0,
 });
 check(
   'undefined amounts do not produce NaN',

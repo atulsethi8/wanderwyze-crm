@@ -1,4 +1,4 @@
-import { Docket } from '../types';
+import { Docket, Invoice } from '../types';
 
 /**
  * What a docket is worth, answered once.
@@ -12,10 +12,12 @@ import { Docket } from '../types';
  */
 
 export interface DocketTotals {
-  /** What the client is billed, tax included. Invoices win when they exist. */
+  /** What the client is billed, tax included. */
   grossBilled: number;
-  /** Billed excluding GST. Equal to grossBilled when there are no invoices to break it out. */
+  /** Billed excluding GST: the itinerary's gross figures. */
   netBilled: number;
+  /** GST charged on the invoices that count (see `billableInvoices`). */
+  gst: number;
   /** What the trip cost the agency, from the itinerary. */
   netCost: number;
   paid: number;
@@ -47,19 +49,26 @@ const itineraryNetCost = (docket: Docket): number =>
     docket.itinerary.serviceCharge?.netCost || 0,
   ]);
 
+/**
+ * The invoices whose GST counts towards the docket.
+ *
+ * Invoices document the itinerary rather than adding to it, and the same trip is routinely
+ * invoiced more than once - a CRM invoice first, then the real one in Zoho Books. Once any
+ * Zoho invoice exists, CRM-only invoices are treated as superseded drafts; voided Zoho
+ * invoices never count.
+ */
+export const billableInvoices = (invoices: Invoice[] = []): Invoice[] => {
+  const zoho = invoices.filter((invoice) => invoice.zoho && invoice.zoho.status?.toLowerCase() !== 'void');
+  if (invoices.some((invoice) => invoice.zoho)) return zoho;
+  return invoices;
+};
+
 export const calculateDocketTotals = (docket: Docket): DocketTotals => {
-  const invoices = docket.invoices || [];
-  const hasInvoices = invoices.length > 0;
-
-  // An invoice is the authoritative record of what was billed; the itinerary is the estimate
-  // standing in until one exists.
-  const grossBilled = hasInvoices
-    ? sum(invoices.map((invoice) => invoice.grandTotal))
-    : itineraryGross(docket);
-
-  // Itinerary figures carry no GST of their own, so gross and net are the same until an
-  // invoice separates them.
-  const netBilled = hasInvoices ? sum(invoices.map((invoice) => invoice.subtotal)) : grossBilled;
+  // Billed amounts come from the itinerary, never by adding invoice totals together: summing
+  // invoices double counts whenever a docket has been invoiced twice.
+  const netBilled = itineraryGross(docket);
+  const gst = sum(billableInvoices(docket.invoices).map((invoice) => invoice.gstAmount));
+  const grossBilled = netBilled + gst;
 
   const netCost = itineraryNetCost(docket);
   const paid = sum((docket.payments || []).map((payment) => payment.amount));
@@ -67,6 +76,7 @@ export const calculateDocketTotals = (docket: Docket): DocketTotals => {
   return {
     grossBilled,
     netBilled,
+    gst,
     netCost,
     paid,
     balance: grossBilled - paid,
