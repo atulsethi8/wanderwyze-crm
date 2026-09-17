@@ -41,16 +41,28 @@ check('profit nets off the fee cost', withFeeCost.profit, 10600);
 
 check('absent service charge is simply zero', calculateDocketTotals(docket({ flights: [flight(90000, 100000)] })).grossBilled, 100000);
 
-// --- invoices add GST, never a second copy of the itinerary ------------------------
-// The bug behind this section: a docket with one Rs 56,388 hotel and two saved invoices
-// showed a grand total of Rs 1,12,876, because every invoice's subtotal was summed.
+// --- invoices win, but only the ones that count ------------------------------------
+// The bug behind this section: a docket with one Rs 56,388 hotel had a CRM invoice for
+// Rs 56,388 and a Zoho invoice for Rs 56,488 + Rs 18 GST (a Rs 100 service charge added in
+// Zoho). Summing every invoice showed Rs 1,12,876.
 console.log('\n--- invoices ---');
-const hotelInvoice = (extra = {}) => ({ subtotal: 56388, gstAmount: 0, grandTotal: 56388, ...extra });
-const twice = calculateDocketTotals(
-  docket({ hotels: [item(52388, 56388)], invoices: [hotelInvoice(), hotelInvoice({ gstAmount: 18, grandTotal: 56406 })] }),
+const real = calculateDocketTotals(
+  docket({
+    hotels: [item(52388, 56388)],
+    invoices: [
+      { subtotal: 56388, gstAmount: 0, grandTotal: 56388 },
+      { subtotal: 56488, gstAmount: 18, grandTotal: 56506, zoho: { status: 'draft' } },
+    ],
+  }),
 );
-check('two invoices for the same hotel are not double counted', twice.netBilled, 56388);
-check('profit is the hotel margin', twice.profit, 4000);
+check('only the Zoho invoice is billed', real.netBilled, 56488);
+check('its GST is added', real.grossBilled, 56506);
+check('the service charge added in Zoho is profit', real.profit, 4100);
+check(
+  'all Zoho invoices voided falls back to the itinerary',
+  calculateDocketTotals(docket({ hotels: [item(0, 700)], invoices: [{ subtotal: 999, gstAmount: 9, zoho: { status: 'void' } }] })).grossBilled,
+  700,
+);
 
 const invoiced = calculateDocketTotals(
   docket({

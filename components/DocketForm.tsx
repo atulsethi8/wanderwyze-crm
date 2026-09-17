@@ -852,14 +852,20 @@ export const DocketForm: React.FC<DocketFormProps> = ({
       grossBilled: formState.itinerary.serviceCharge?.grossBilled || 0,
     };
 
-    // The itinerary is the billed base. Invoices only document it, so adding their
-    // subtotals together double counts a docket that has been invoiced twice.
-    const grandTotalGross =
+    // Invoice subtotals win over the itinerary (an invoice can carry a service charge
+    // added only at invoicing time), but only from invoices that count: summing every
+    // saved copy double counts a docket that was invoiced in the CRM and then in Zoho.
+    const countedInvoices = billableInvoices(formState.invoices);
+    const itineraryGrossTotal =
       flightsTotal.grossBilled +
       hotelsTotal.grossBilled +
       excursionsTotal.grossBilled +
       transfersTotal.grossBilled +
       serviceChargeTotals.grossBilled;
+    const grandTotalGross =
+      countedInvoices.length > 0
+        ? countedInvoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
+        : itineraryGrossTotal;
     const grandTotalNet =
       flightsTotal.netCost +
       hotelsTotal.netCost +
@@ -872,7 +878,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     );
 
     // GST from the invoices that count, skipping superseded and voided ones.
-    const totalGST = billableInvoices(formState.invoices).reduce(
+    const totalGST = countedInvoices.reduce(
       (sum, invoice) => sum + (invoice.gstAmount || 0),
       0,
     );

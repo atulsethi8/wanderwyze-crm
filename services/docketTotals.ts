@@ -14,7 +14,7 @@ import { Docket, Invoice } from '../types';
 export interface DocketTotals {
   /** What the client is billed, tax included. */
   grossBilled: number;
-  /** Billed excluding GST: the itinerary's gross figures. */
+  /** Billed excluding GST: invoice subtotals when there are any, else the itinerary. */
   netBilled: number;
   /** GST charged on the invoices that count (see `billableInvoices`). */
   gst: number;
@@ -64,10 +64,14 @@ export const billableInvoices = (invoices: Invoice[] = []): Invoice[] => {
 };
 
 export const calculateDocketTotals = (docket: Docket): DocketTotals => {
-  // Billed amounts come from the itinerary, never by adding invoice totals together: summing
-  // invoices double counts whenever a docket has been invoiced twice.
-  const netBilled = itineraryGross(docket);
-  const gst = sum(billableInvoices(docket.invoices).map((invoice) => invoice.gstAmount));
+  // An invoice is the authoritative record of what was billed - it can carry a service charge
+  // added only at invoicing time - so its subtotal wins over the itinerary estimate. Only the
+  // invoices that count are summed, since adding every saved copy double counts.
+  const invoices = billableInvoices(docket.invoices);
+  const netBilled = invoices.length > 0
+    ? sum(invoices.map((invoice) => invoice.subtotal))
+    : itineraryGross(docket);
+  const gst = sum(invoices.map((invoice) => invoice.gstAmount));
   const grossBilled = netBilled + gst;
 
   const netCost = itineraryNetCost(docket);
