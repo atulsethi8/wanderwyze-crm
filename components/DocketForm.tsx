@@ -85,6 +85,19 @@ const normalizeFlight = (flight: Flight): Flight => {
   };
 };
 
+/**
+ * Ids minted inside an upload loop need more than the clock: several files are processed
+ * within the same millisecond, and `FILE-${Date.now()}` then collides, so React renders
+ * duplicate keys and the wrong document is linked to an item.
+ */
+let idSequence = 0;
+const uniqueId = (prefix: string) => `${prefix}-${Date.now()}-${(idSequence++).toString(36)}`;
+
+/** Lists the files an upload could not read, for a single summary rather than one alert each. */
+const describeUnreadable = (names: string[]): string =>
+  `${names.length} of the uploaded files could not be read automatically:\n\n${names.join('\n')}\n\n` +
+  'They are attached to the docket - please enter their details manually.';
+
 const syncLegacyFlightFields = (
   flight: Flight,
   sectors: FlightSector[],
@@ -992,11 +1005,13 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     linkedItemId?: string,
     linkedItemType?: "flight" | "hotel" | "excursion" | "transfer",
   ) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+
+    for (const file of files) {
       const base64 = await toBase64(file);
       const uploadedFile: UploadedFile = {
-        id: `FILE-${Date.now()}`,
+        id: uniqueId("FILE"),
         name: file.name,
         type: file.type,
         size: file.size,
@@ -1005,8 +1020,8 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         linkedItemType,
       };
       setFormState((p) => ({ ...p, files: [...p.files, uploadedFile] }));
-      e.target.value = ""; // Reset file input to allow re-uploading the same file
     }
+    e.target.value = ""; // Reset file input to allow re-uploading the same file
   };
 
   const passengerTypeFromAI = (value?: string) =>
@@ -1022,231 +1037,344 @@ export const DocketForm: React.FC<DocketFormProps> = ({
         ? Gender.Male
         : Gender.Other;
 
+  /**
+   * Applies one e-ticket to the docket: attaches the PDF, merges its passengers, then either
+   * fills the flight row the upload came from (`targetIndex`) or adds a flight of its own.
+   * Returns null on success, or the message explaining why the layout could not be read, so
+   * a batch of uploads can be summarised once instead of alerting per file.
+   */
+  const applyTicketFile = async (
+    file: File,
+    targetIndex: number | null,
+  ): Promise<string | null> => {
+    const base64 = await toBase64(file);
+    const uploadedFile: UploadedFile = {
+      id: uniqueId("FILE"),
+      name: file.name,
+      type: file.type || "application/pdf",
+      size: file.size,
+      content: base64,
+      ...(targetIndex === null
+        ? {}
+        : {
+            linkedItemId: formState.itinerary.flights[targetIndex]?.id,
+            linkedItemType: "flight" as const,
+          }),
+    };
+    // Preserve the source document even when the ticket cannot be read automatically.
+    setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
+
+    const { data: extractedData, reason } = await extractDocumentData({
+      base64,
+      mimeType: file.type,
+      parse: parseETicketText,
+    });
+
+    if (!extractedData || !extractedData.sectors?.length) {
+      console.warn("Ticket layout not recognised:", reason);
+      return explainExtractionFailure(reason);
+    }
+
+    setFormState((prev) => {
+      const extractedPassengers = extractedData.passengers || [];
+      const existingNames = new Set(
+        prev.passengers.map((p) => p.fullName.toLowerCase().trim()),
+      );
+      const newUniquePassengers: Passenger[] = extractedPassengers
+        .filter(
+          (p: { fullName: string }) =>
+            p.fullName && !existingNames.has(p.fullName.toLowerCase().trim()),
+        )
+        .map(
+          (p: {
+            fullName: string;
+            passengerType?: string;
+            gender?: string;
+          }): Passenger => ({
+            id: uniqueId("PAX"),
+            fullName: p.fullName.trim(),
+            type: passengerTypeFromAI(p.passengerType),
+            gender: genderFromAI(p.gender),
+          }),
+        );
+      const updatedGlobalPassengers = [
+        ...prev.passengers,
+        ...newUniquePassengers,
+      ];
+      const extractedPassengerNames = new Set(
+        extractedPassengers.map((p: { fullName: string }) =>
+          p.fullName.toLowerCase().trim(),
+        ),
+      );
+      const passengerIdsForThisFlight = updatedGlobalPassengers
+        .filter((p) =>
+          extractedPassengerNames.has(p.fullName.toLowerCase().trim()),
+        )
+        .map((p) => p.id);
+      const passengerDetails: FlightPassengerDetail[] =
+        passengerIdsForThisFlight.map((paxId) => ({
+          passengerId: paxId,
+          passengerType: updatedGlobalPassengers.find((p) => p.id === paxId)!
+            .type,
+          netCost: 0,
+          grossBilled: 0,
+        }));
+      const sectors = extractedData.sectors.map(
+        (sector: Partial<FlightSector>) => createSector(sector),
+      );
+      // parseETicketText only ever produces one of the three valid trip types.
+      const detectedType: FlightTripType = extractedData.tripType;
+
+      if (targetIndex !== null && prev.itinerary.flights[targetIndex]) {
+        const updatedFlights = prev.itinerary.flights.map((flight, index) => {
+          if (index !== targetIndex) return flight;
+          const updatedFlight = syncLegacyFlightFields(
+            {
+              ...flight,
+              pnr: extractedData.pnr || flight.pnr,
+              bookingId: extractedData.bookingId || flight.bookingId,
+              tripType: detectedType,
+              passengerDetails,
+            },
+            sectors,
+          );
+          if (updatedFlight.isNetGrossSameForAll) {
+            updatedFlight.passengerDetails = updatedFlight.passengerDetails.map(
+              (pd) => ({
+                ...pd,
+                netCost: updatedFlight.commonNetCost,
+                grossBilled: updatedFlight.commonGrossBilled,
+              }),
+            );
+          }
+          return updatedFlight;
+        });
+
+        return {
+          ...prev,
+          passengers: updatedGlobalPassengers,
+          itinerary: { ...prev.itinerary, flights: updatedFlights },
+        };
+      }
+
+      const newFlightId = uniqueId("FL");
+      const newFlight: Flight = syncLegacyFlightFields(
+        {
+          id: newFlightId,
+          airline: "",
+          pnr: extractedData.pnr || "",
+          bookingId: extractedData.bookingId || "",
+          flightNumber: "",
+          departureDate: "",
+          departureTime: "",
+          arrivalDate: "",
+          arrivalTime: "",
+          departureAirport: "",
+          arrivalAirport: "",
+          tripType: detectedType,
+          supplier: null,
+          isNetGrossSameForAll: true,
+          commonNetCost: 0,
+          commonGrossBilled: 0,
+          passengerDetails,
+        },
+        sectors,
+      );
+
+      return {
+        ...prev,
+        passengers: updatedGlobalPassengers,
+        itinerary: {
+          ...prev.itinerary,
+          flights: [...prev.itinerary.flights, newFlight],
+        },
+        files: prev.files.map((savedFile) =>
+          savedFile.id === uploadedFile.id
+            ? {
+                ...savedFile,
+                linkedItemId: newFlightId,
+                linkedItemType: "flight" as const,
+              }
+            : savedFile,
+        ),
+      };
+    });
+
+    return null;
+  };
+
+  /** Reads every selected ticket, then reports the ones that could not be read, together. */
+  const applyTicketFiles = async (
+    files: File[],
+    firstTargetIndex: number | null,
+    context: string,
+  ) => {
+    setDocumentLoading(true);
+    const unreadable: { name: string; message: string }[] = [];
+    try {
+      for (const [position, file] of files.entries()) {
+        try {
+          // Only the first ticket fills an existing flight row; the rest are added as their
+          // own flights rather than overwriting it.
+          const message = await applyTicketFile(
+            file,
+            position === 0 ? firstTargetIndex : null,
+          );
+          if (message) unreadable.push({ name: file.name, message });
+        } catch (error) {
+          console.error(`Ticket parsing error in ${context}:`, error);
+          unreadable.push({
+            name: file.name,
+            message:
+              "The PDF has been attached, but its details could not be read. You can enter the flight manually and save the docket.",
+          });
+        }
+      }
+    } finally {
+      setDocumentLoading(false);
+    }
+
+    if (unreadable.length === 1) alert(unreadable[0].message);
+    else if (unreadable.length > 1)
+      alert(describeUnreadable(unreadable.map((u) => u.name)));
+  };
+
   // Extract every passenger and sector, then retain the source ticket as a linked file.
   const handleFlightTicketUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     itemIndex: number,
   ) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-
-    const file = e.target.files[0];
-    setDocumentLoading(true);
-    console.log("Uploading in tab: flight", "Updating flight details...");
-
-    try {
-      const base64 = await toBase64(file);
-      const flightId = formState.itinerary.flights[itemIndex]?.id;
-      const uploadedFile: UploadedFile = {
-        id: `FILE-${Date.now()}`,
-        name: file.name,
-        type: file.type || "application/pdf",
-        size: file.size,
-        content: base64,
-        linkedItemId: flightId,
-        linkedItemType: "flight",
-      };
-      // Preserve the source document even when the ticket cannot be read automatically.
-      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const { data: extractedData, reason } = await extractDocumentData({
-        base64,
-        mimeType: file.type,
-        parse: parseETicketText,
-      });
-
-      if (extractedData && extractedData.sectors?.length) {
-        setFormState((prev) => {
-          const extractedPassengers = extractedData.passengers || [];
-          const existingNames = new Set(
-            prev.passengers.map((p) => p.fullName.toLowerCase().trim()),
-          );
-          const newUniquePassengers: Passenger[] = extractedPassengers
-            .filter(
-              (p: { fullName: string }) =>
-                p.fullName &&
-                !existingNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map(
-              (p: {
-                fullName: string;
-                passengerType?: string;
-                gender?: string;
-              }): Passenger => ({
-                id: `PAX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                fullName: p.fullName.trim(),
-                type: passengerTypeFromAI(p.passengerType),
-                gender: genderFromAI(p.gender),
-              }),
-            );
-          const updatedGlobalPassengers = [
-            ...prev.passengers,
-            ...newUniquePassengers,
-          ];
-          const extractedPassengerNames = new Set(
-            extractedPassengers.map((p: { fullName: string }) =>
-              p.fullName.toLowerCase().trim(),
-            ),
-          );
-          const passengerIdsForThisFlight = updatedGlobalPassengers
-            .filter((p) =>
-              extractedPassengerNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map((p) => p.id);
-          const newPassengerDetailsForFlight: FlightPassengerDetail[] =
-            passengerIdsForThisFlight.map((paxId) => ({
-              passengerId: paxId,
-              passengerType: updatedGlobalPassengers.find(
-                (p) => p.id === paxId,
-              )!.type,
-              netCost: 0,
-              grossBilled: 0,
-            }));
-
-          const updatedFlights = prev.itinerary.flights.map((flight, index) => {
-            if (index === itemIndex) {
-              const sectors = extractedData.sectors.map(
-                (sector: Partial<FlightSector>) => createSector(sector),
-              );
-              // parseETicketText only ever produces one of the three valid trip types.
-              const detectedType: FlightTripType = extractedData.tripType;
-              const updatedFlight = syncLegacyFlightFields(
-                {
-                  ...flight,
-                  pnr: extractedData.pnr || flight.pnr,
-                  bookingId: extractedData.bookingId || flight.bookingId,
-                  tripType: detectedType,
-                  passengerDetails: newPassengerDetailsForFlight,
-                },
-                sectors,
-              );
-              if (updatedFlight.isNetGrossSameForAll) {
-                updatedFlight.passengerDetails =
-                  updatedFlight.passengerDetails.map((pd) => ({
-                    ...pd,
-                    netCost: updatedFlight.commonNetCost,
-                    grossBilled: updatedFlight.commonGrossBilled,
-                  }));
-              }
-              return updatedFlight;
-            }
-            return flight;
-          });
-
-          return {
-            ...prev,
-            passengers: updatedGlobalPassengers,
-            itinerary: { ...prev.itinerary, flights: updatedFlights },
-          };
-        });
-      } else {
-        alert(
-          explainExtractionFailure(reason),
-        );
-      }
-    } catch (error) {
-      console.error("Ticket parsing error in Flight tab:", error);
-      alert("The PDF has been attached, but its details could not be read. You can enter the flight manually and save the docket.");
-    } finally {
-      setDocumentLoading(false);
-      e.target.value = "";
-    }
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    await applyTicketFiles(files, itemIndex, "Flight tab");
+    e.target.value = "";
   };
 
-  // Dedicated handler for processing hotel vouchers. It only updates hotel-related state.
+  /**
+   * Applies one hotel voucher: attaches the PDF, merges its guests and adds the hotel.
+   * Returns null on success, or the message explaining why it could not be read.
+   */
+  const applyVoucherFile = async (file: File): Promise<string | null> => {
+    const base64 = await toBase64(file);
+    const uploadedFile: UploadedFile = {
+      id: uniqueId("FILE"),
+      name: file.name,
+      type: file.type || "application/pdf",
+      size: file.size,
+      content: base64,
+    };
+    setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
+
+    const { data: extractedData, reason } = await extractDocumentData({
+      base64,
+      mimeType: file.type,
+      parse: parseHotelVoucherText,
+    });
+
+    if (!extractedData || !extractedData.hotel) {
+      console.warn("Voucher layout not recognised:", reason);
+      return explainExtractionFailure(reason);
+    }
+
+    setFormState((prev) => {
+      const { passengers: extractedPassengers, hotel: extractedHotel } =
+        extractedData;
+      const existingNames = new Set(
+        prev.passengers.map((p) => p.fullName.toLowerCase().trim()),
+      );
+      const newUniquePassengers: Passenger[] = (extractedPassengers || [])
+        .filter(
+          (p: { fullName: string }) =>
+            p.fullName && !existingNames.has(p.fullName.toLowerCase().trim()),
+        )
+        .map(
+          (p: { fullName: string }): Passenger => ({
+            id: uniqueId("PAX"),
+            fullName: p.fullName.trim(),
+            type: PassengerType.Adult,
+            gender: Gender.Male,
+          }),
+        );
+      const updatedGlobalPassengers = [
+        ...prev.passengers,
+        ...newUniquePassengers,
+      ];
+      const extractedPassengerNames = new Set(
+        (extractedPassengers || []).map((p: { fullName: string }) =>
+          p.fullName.toLowerCase().trim(),
+        ),
+      );
+      const passengerIdsForThisHotel = updatedGlobalPassengers
+        .filter((p) =>
+          extractedPassengerNames.has(p.fullName.toLowerCase().trim()),
+        )
+        .map((p) => p.id);
+
+      const newHotelId = uniqueId("HO");
+      const newHotel: Hotel = {
+        id: newHotelId,
+        netCost: 0,
+        grossBilled: 0,
+        supplier: null,
+        numberOfRooms: 1,
+        ...extractedHotel,
+        paxRefs: passengerIdsForThisHotel,
+      };
+
+      return {
+        ...prev,
+        passengers: updatedGlobalPassengers,
+        itinerary: {
+          ...prev.itinerary,
+          hotels: [...prev.itinerary.hotels, newHotel],
+        },
+        files: prev.files.map((savedFile) =>
+          savedFile.id === uploadedFile.id
+            ? {
+                ...savedFile,
+                linkedItemId: newHotelId,
+                linkedItemType: "hotel" as const,
+              }
+            : savedFile,
+        ),
+      };
+    });
+
+    return null;
+  };
+
+  // Reads every selected voucher, each adding its own hotel, and reports the unreadable ones
+  // together rather than one alert at a time.
   const handleHotelVoucherUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
 
-    const file = e.target.files[0];
     setDocumentLoading(true);
-    console.log("Uploading in tab: hotel", "Updating hotel details...");
-
+    const unreadable: { name: string; message: string }[] = [];
     try {
-      const base64 = await toBase64(file);
-      const uploadedFile: UploadedFile = {
-        id: `FILE-${Date.now()}`,
-        name: file.name,
-        type: file.type || "application/pdf",
-        size: file.size,
-        content: base64,
-      };
-      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const { data: extractedData, reason } = await extractDocumentData({
-        base64,
-        mimeType: file.type,
-        parse: parseHotelVoucherText,
-      });
-
-      if (extractedData && extractedData.hotel) {
-        setFormState((prev) => {
-          const { passengers: extractedPassengers, hotel: extractedHotel } =
-            extractedData;
-          const existingNames = new Set(
-            prev.passengers.map((p) => p.fullName.toLowerCase().trim()),
-          );
-          const newUniquePassengers: Passenger[] = (extractedPassengers || [])
-            .filter(
-              (p: { fullName: string }) =>
-                p.fullName &&
-                !existingNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map(
-              (p: { fullName: string }): Passenger => ({
-                id: `PAX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                fullName: p.fullName.trim(),
-                type: PassengerType.Adult,
-                gender: Gender.Male,
-              }),
-            );
-          const updatedGlobalPassengers = [
-            ...prev.passengers,
-            ...newUniquePassengers,
-          ];
-          const extractedPassengerNames = new Set(
-            (extractedPassengers || []).map((p: { fullName: string }) =>
-              p.fullName.toLowerCase().trim(),
-            ),
-          );
-          const passengerIdsForThisHotel = updatedGlobalPassengers
-            .filter((p) =>
-              extractedPassengerNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map((p) => p.id);
-
-          const newHotelId = `HO-${Date.now()}`;
-          const newHotel: Hotel = {
-            id: newHotelId,
-            netCost: 0,
-            grossBilled: 0,
-            supplier: null,
-            numberOfRooms: 1,
-            ...extractedHotel,
-            paxRefs: passengerIdsForThisHotel,
-          };
-
-          return {
-            ...prev,
-            passengers: updatedGlobalPassengers,
-            itinerary: {
-              ...prev.itinerary,
-              hotels: [...prev.itinerary.hotels, newHotel],
-            },
-            files: prev.files.map((savedFile) => savedFile.id === uploadedFile.id ? { ...savedFile, linkedItemId: newHotelId, linkedItemType: "hotel" } : savedFile),
-          };
-        });
-      } else {
-        console.warn("Voucher layout not recognised:", reason);
-        alert(explainExtractionFailure(reason));
+      for (const file of files) {
+        try {
+          const message = await applyVoucherFile(file);
+          if (message) unreadable.push({ name: file.name, message });
+        } catch (error) {
+          console.error("Voucher parsing error in Hotel tab:", error);
+          unreadable.push({
+            name: file.name,
+            message:
+              "The voucher has been attached, but its details could not be read. You can enter the hotel manually and save the docket.",
+          });
+        }
       }
-    } catch (error) {
-      console.error("Voucher parsing error in Hotel tab:", error);
-      alert(
-        "The voucher has been attached, but its details could not be read. You can enter the hotel manually and save the docket.",
-      );
     } finally {
       setDocumentLoading(false);
       e.target.value = "";
     }
+
+    if (unreadable.length === 1) alert(unreadable[0].message);
+    else if (unreadable.length > 1)
+      alert(describeUnreadable(unreadable.map((u) => u.name)));
   };
 
   const handleSaveSupplier = () => {
@@ -1490,127 +1618,15 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     </div>
   );
 
-  // New: Handler to upload an e-ticket from the Passengers tab.
-  // This will auto-fill the passenger list and create a new flight from the ticket details.
+  // Upload one or more e-tickets from the Passengers tab. Each adds its own flight and fills
+  // the passenger list from the ticket.
   const handlePassengerTabTicketUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
-    setDocumentLoading(true);
-    try {
-      const base64 = await toBase64(file);
-      const uploadedFile: UploadedFile = {
-        id: `FILE-${Date.now()}`,
-        name: file.name,
-        type: file.type || "application/pdf",
-        size: file.size,
-        content: base64,
-      };
-      setFormState((prev) => ({ ...prev, files: [...prev.files, uploadedFile] }));
-      const { data: extractedData, reason } = await extractDocumentData({
-        base64,
-        mimeType: file.type,
-        parse: parseETicketText,
-      });
-      if (extractedData && extractedData.sectors?.length) {
-        setFormState((prev) => {
-          const extractedPassengers = extractedData.passengers || [];
-          // Merge passengers
-          const existingNames = new Set(
-            prev.passengers.map((p) => p.fullName.toLowerCase().trim()),
-          );
-          const newUniquePassengers: Passenger[] = (extractedPassengers || [])
-            .filter(
-              (p: { fullName: string }) =>
-                p.fullName &&
-                !existingNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map(
-              (p: {
-                fullName: string;
-                passengerType?: string;
-                gender?: string;
-              }): Passenger => ({
-                id: `PAX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                fullName: p.fullName.trim(),
-                type: passengerTypeFromAI(p.passengerType),
-                gender: genderFromAI(p.gender),
-              }),
-            );
-          const updatedGlobalPassengers = [
-            ...prev.passengers,
-            ...newUniquePassengers,
-          ];
-          const extractedPassengerNames = new Set(
-            (extractedPassengers || []).map((p: { fullName: string }) =>
-              p.fullName.toLowerCase().trim(),
-            ),
-          );
-          const passengerIdsForThisFlight = updatedGlobalPassengers
-            .filter((p) =>
-              extractedPassengerNames.has(p.fullName.toLowerCase().trim()),
-            )
-            .map((p) => p.id);
-
-          // Create a new flight entry populated from the ticket
-          const newFlightId = `FL-${Date.now()}`;
-          const sectors = extractedData.sectors.map(
-            (sector: Partial<FlightSector>) => createSector(sector),
-          );
-          // parseETicketText only ever produces one of the three valid trip types.
-          const detectedType: FlightTripType = extractedData.tripType;
-          const newFlight: Flight = syncLegacyFlightFields(
-            {
-              id: newFlightId,
-              airline: "",
-              pnr: extractedData.pnr || "",
-              bookingId: extractedData.bookingId || "",
-              flightNumber: "",
-              departureDate: "",
-              departureTime: "",
-              arrivalDate: "",
-              arrivalTime: "",
-              departureAirport: "",
-              arrivalAirport: "",
-              tripType: detectedType,
-              supplier: null,
-              isNetGrossSameForAll: true,
-              commonNetCost: 0,
-              commonGrossBilled: 0,
-              passengerDetails: passengerIdsForThisFlight.map((paxId) => ({
-                passengerId: paxId,
-                passengerType: updatedGlobalPassengers.find(
-                  (p) => p.id === paxId,
-                )!.type,
-                netCost: 0,
-                grossBilled: 0,
-              })),
-            },
-            sectors,
-          );
-
-          return {
-            ...prev,
-            passengers: updatedGlobalPassengers,
-            itinerary: {
-              ...prev.itinerary,
-              flights: [...prev.itinerary.flights, newFlight],
-            },
-            files: prev.files.map((savedFile) => savedFile.id === uploadedFile.id ? { ...savedFile, linkedItemId: newFlightId, linkedItemType: "flight" } : savedFile),
-          };
-        });
-      } else {
-        console.warn("Ticket layout not recognised:", reason);
-        alert(explainExtractionFailure(reason));
-      }
-    } catch (error) {
-      console.error("Ticket parsing error in Passengers tab:", error);
-      alert("The PDF has been attached, but its details could not be read. You can enter the flight manually and save the docket.");
-    } finally {
-      setDocumentLoading(false);
-      e.target.value = "";
-    }
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    await applyTicketFiles(files, null, "Passengers tab");
+    e.target.value = "";
   };
 
   return (
@@ -1782,6 +1798,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                         className="hidden"
                         onChange={handlePassengerTabTicketUpload}
                         accept="image/*,application/pdf"
+                        multiple
                         disabled={isReadOnly}
                       />
                     </div>
@@ -2180,6 +2197,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                             className="hidden"
                             onChange={(e) => handleFlightTicketUpload(e, index)}
                             accept="image/*,application/pdf"
+                            multiple
                             disabled={isReadOnly}
                           />
                           <button
@@ -2380,6 +2398,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                         className="hidden"
                         onChange={handleHotelVoucherUpload}
                         accept="image/*,application/pdf"
+                        multiple
                         disabled={isReadOnly}
                       />
                     </div>
@@ -2941,6 +2960,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                   <input
                     type="file"
                     onChange={(e) => handleFileUpload(e)}
+                    multiple
                     className="mb-4"
                     disabled={isReadOnly}
                   />
