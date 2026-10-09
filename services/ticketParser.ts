@@ -199,7 +199,22 @@ const orderTimesForSameDay = (times: string[], sameDay: boolean): string[] =>
 
 // --- Sectors -----------------------------------------------------------------------
 
-const findSectors = (lines: string[]): ParsedSector[] => {
+/**
+ * Where the itinerary ends and the summary blocks begin. The baggage, fare and ancillary
+ * tables repeat the flight numbers and airport pairs without their dates, and each repeat
+ * would otherwise open a dateless sector that fails the completeness gate - rejecting a
+ * ticket whose actual flights read perfectly.
+ */
+const ITINERARY_END =
+  /^(?:Ancillary|Baggage|Seat|Meal)\s+Details\b|^Payment\s+Details\b|^Fare\s+(?:Details|Breakup|Break\s*up|Summary)\b|^General\s+Information\b|^Terms\s*(?:&|and)\s*Conditions\b|^Important\s+Information\b/i;
+
+const itineraryLines = (lines: string[]): string[] => {
+  const end = lines.findIndex((line) => ITINERARY_END.test(line));
+  return end > 0 ? lines.slice(0, end) : lines;
+};
+
+const findSectors = (allLines: string[]): ParsedSector[] => {
+  const lines = itineraryLines(allLines);
   // Each flight-number line opens a sector; that sector's details run until the next one.
   const anchors = lines
     .map((line, index) => ({ index, match: line.match(FLIGHT_PATTERN) }))
@@ -245,11 +260,32 @@ const findSectors = (lines: string[]): ParsedSector[] => {
   return sectors;
 };
 
+const minutesBetween = (date: string, time: string, laterDate: string, laterTime: string): number =>
+  (Date.parse(`${laterDate}T${laterTime || '00:00'}:00`) - Date.parse(`${date}T${time || '00:00'}:00`)) / 60000;
+
+/**
+ * A connection is not a destination: HYD-DEL-TAS on one day is a one-way trip with a change
+ * at Delhi, not a multi-city itinerary. Sectors are grouped into journeys, breaking only
+ * where the traveller does not continue from where they landed, or stays over a day.
+ */
+const countJourneys = (sectors: ParsedSector[]): number => {
+  let journeys = 1;
+  for (let i = 1; i < sectors.length; i++) {
+    const previous = sectors[i - 1];
+    const current = sectors[i];
+    const gap = minutesBetween(previous.arrivalDate, previous.arrivalTime, current.departureDate, current.departureTime);
+    const connects = current.departureAirport === previous.arrivalAirport && gap >= 0 && gap <= 24 * 60;
+    if (!connects) journeys++;
+  }
+  return journeys;
+};
+
 const detectTripType = (sectors: ParsedSector[]): FlightTripType => {
   if (sectors.length <= 1) return 'One Way';
-  const first = sectors[0];
-  const last = sectors[sectors.length - 1];
-  return last.arrivalAirport === first.departureAirport ? 'Return' : 'Multi-City';
+  const journeys = countJourneys(sectors);
+  if (journeys === 1) return 'One Way';
+  const returnsHome = sectors[sectors.length - 1].arrivalAirport === sectors[0].departureAirport;
+  return journeys === 2 && returnsHome ? 'Return' : 'Multi-City';
 };
 
 // --- Entry point -------------------------------------------------------------------

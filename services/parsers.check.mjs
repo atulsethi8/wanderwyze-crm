@@ -174,6 +174,53 @@ check('Eight-character PNR kept whole', parseETicketText([
   'Fri, 18-Sep-2026 12:35',
 ].join('\n'))?.pnr, 'ABCDEFGH');
 
+// A one-way with a change of plane, as the airline's own itinerary PDF reads: the baggage
+// table at the foot repeats each flight number and airport pair without their dates, and
+// those repeats used to open dateless sectors that failed the completeness gate and sank the
+// whole ticket.
+const connectingTicket = [
+  'Wander Wyze Holidays  ETicket  Confirmed',
+  'PNR: AI  9XD7PB',
+  'Issued Date: Mon, 05Oct2026 10:56',
+  'First Name  Last Name  Passenger Type  ETicket Number  Frequent Flyer No.  GST No.',
+  'MR TEST  TRAVELLER  Adult  0983978629414',
+  'Flight Details  Departure  Arrival',
+  'Departure Flight',
+  'Air India AI 2466  HYD  DEL',
+  'Business , Class Z  (Rajiv Gandhi International Airport,  (Indira Gandhi Airport, Delhi)',
+  'Airline PNR : 9XD7PB',
+  'Mon, 30Nov2026 08:35  Mon, 30Nov2026 10:55',
+  'Layover : 1h 55m, Indira Gandhi Airport',
+  'Air India AI 7109  DEL  TAS',
+  'Business , Class Z  (Indira Gandhi Airport, Delhi)  (Tashkent, Tashkent)',
+  'Airline PNR : 9XD7PB  Mon, 30Nov2026 12:50  Mon, 30Nov2026 15:10',
+  'Ancillary Details  Barcode',
+  'Departure Flight',
+  'MR TEST TRAVELLER',
+  'Baggage  Seat  Meal  Special Service',
+  'HYD DEL',
+  'AI 2466  Cabin:',
+  'CheckIn: 40 Kg',
+  'MR TEST TRAVELLER',
+  'DEL TAS',
+  'AI 7109  Cabin:',
+  'CheckIn: 40 Kg',
+  'General Information :  Payment Details',
+  'Fare:  60,590.00',
+].join('\n');
+
+const connecting = parseETicketText(connectingTicket);
+check('Connecting ticket parses', Boolean(connecting), true);
+check('Baggage table adds no phantom sector', connecting?.sectors.length, 2);
+check('A change of plane is still one way', connecting?.tripType, 'One Way');
+check(
+  'Connecting sectors',
+  connecting?.sectors.map((s) => `${s.flightNumber} ${s.departureAirport}-${s.arrivalAirport} ${s.departureDate} ${s.departureTime}`),
+  ['AI2466 HYD-DEL 2026-11-30 08:35', 'AI7109 DEL-TAS 2026-11-30 12:50'],
+);
+check('Connecting ticket PNR', connecting?.pnr, '9XD7PB');
+check('Connecting ticket passenger', connecting?.passengers.map((p) => p.fullName), ['Test Traveller']);
+
 // ------------------------------------------------------------ hotel vouchers
 
 const labelledVoucher = [
