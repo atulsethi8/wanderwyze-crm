@@ -250,8 +250,9 @@ export const useDockets = () => {
                 }
 
             } catch (error: any) {
-                console.error("Error fetching data from Supabase:", error.message);
-                alert("Could not load data from the database. Please check your connection or contact support.");
+                // Keep failures visible to developers without blocking staff with repeated alerts.
+                // A transient failure should not interrupt an otherwise usable CRM screen.
+                console.error("Error fetching data from Supabase:", error);
             } finally {
                 setLoading(false);
             }

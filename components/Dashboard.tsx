@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Agent, BookingStatus, Docket } from "../types";
-import { STATUS_COLORS } from "../constants";
+import { useAuth } from "../hooks";
 import { formatCurrency, formatDate } from "../services";
 import { calculateDocketTotals } from "../services/docketTotals";
 import { EmptyState } from "./common";
@@ -22,8 +22,8 @@ interface DashboardProps {
 type ProductFilter = "All Bookings" | "Flights" | "Hotels" | "Packages";
 
 const money = (d: Docket) => {
-  const { grossBilled, balance } = calculateDocketTotals(d);
-  return { amount: grossBilled, balance };
+  const { grossBilled, balance, profit } = calculateDocketTotals(d);
+  return { amount: grossBilled, balance, profit };
 };
 const travelDate = (d: Docket) =>
   [
@@ -95,6 +95,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectDocket,
   searchTerm = "",
 }) => {
+  const { currentUser } = useAuth();
+  const canViewProfit = currentUser?.role === "admin";
+  const dashboardColumns = COLUMNS.filter((column) => canViewProfit || column.sortKey !== "profit");
+  const [outstandingOnly, setOutstandingOnly] = useState(false);
   const [productFilter, setProductFilter] =
     useState<ProductFilter>("All Bookings");
   const [statusFilter, setStatusFilter] = useState("All"),
@@ -136,6 +140,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               row.product.type === productFilter) &&
             (statusFilter === "All" || row.docket.status === statusFilter) &&
             (agentFilter === "All" || row.docket.agentId === agentFilter) &&
+            (!outstandingOnly || row.balance > 0) &&
             (!travelFrom ||
               (!!row.travelDate && row.travelDate >= travelFrom)) &&
             (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
@@ -149,27 +154,38 @@ export const Dashboard: React.FC<DashboardProps> = ({
       productFilter,
       statusFilter,
       agentFilter,
+      outstandingOnly,
       travelFrom,
       travelTo,
       sort,
     ],
   );
-  const outstanding = useMemo(
-    () => dockets.reduce((s, d) => s + Math.max(0, money(d).balance), 0),
-    [dockets],
+  // Operational metrics use the same current booking filters as financial totals.
+  const confirmedCount = useMemo(
+    () => rows.filter(row => row.docket.status === BookingStatus.Confirmed).length,
+    [rows],
   );
-  const upcoming = useMemo(
-    () =>
-      dockets.filter((d) => {
-        const date = travelDate(d);
-        if (!date) return false;
-        const days =
-          (new Date(`${date}T00:00:00`).getTime() -
-            new Date().setHours(0, 0, 0, 0)) /
-          86400000;
-        return days >= 0 && days <= 30 && d.status !== BookingStatus.Cancelled;
-      }).length,
-    [dockets],
+  const upcomingCount = useMemo(
+    () => rows.filter(row => {
+      const date = row.travelDate;
+      if (!date || row.docket.status === BookingStatus.Cancelled) return false;
+      const days = (new Date(`${date}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000;
+      return days >= 0 && days <= 30;
+    }).length,
+    [rows],
+  );
+
+  // All dashboard totals come from the same filtered booking rows as the table.
+  const totals = useMemo(
+    () => rows.reduce(
+      (sum, row) => ({
+        gross: sum.gross + row.amount,
+        profit: sum.profit + row.profit,
+        outstanding: sum.outstanding + Math.max(0, row.balance),
+      }),
+      { gross: 0, profit: 0, outstanding: 0 },
+    ),
+    [rows],
   );
 
   return (
@@ -183,22 +199,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Stat tiles. The accent bar gives the row a spine without adding colour noise. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {[
-            ["Total bookings", dockets.length.toString(), false],
-            [
-              "Confirmed",
-              dockets
-                .filter((d) => d.status === BookingStatus.Confirmed)
-                .length.toString(),
-              false,
-            ],
-            ["Travel in 30 days", upcoming.toString(), false],
-            ["Outstanding", formatCurrency(outstanding), outstanding > 0],
+            ["Total bookings", rows.length.toString(), false],
+            ["Confirmed", confirmedCount.toString(), false],
+            ["Travel in 30 days", upcomingCount.toString(), false],
+            ["Total Gross", formatCurrency(totals.gross), false],
+            ...(canViewProfit ? [["Total Profit", formatCurrency(totals.profit), totals.profit < 0] as const] : []),
+            ["Outstanding", formatCurrency(totals.outstanding), totals.outstanding > 0],
           ].map(([label, value, alert]) => (
-            <div
+            <button
               key={label as string}
-              className="relative bg-surface border border-line rounded-xl px-5 py-4 shadow-card overflow-hidden"
+              type="button"
+              disabled={label !== "Outstanding"}
+              onClick={() => setOutstandingOnly(active => !active)}
+              aria-pressed={label === "Outstanding" ? outstandingOnly : undefined}
+              title={label === "Outstanding" ? "Click to show outstanding bookings; click again to show all" : undefined}
+              className={`relative text-left bg-surface border rounded-xl px-5 py-4 shadow-card overflow-hidden ${label === "Outstanding" ? "cursor-pointer hover:border-brand hover:shadow-md focus-visible:outline-2 focus-visible:outline-brand" : "cursor-default"} ${label === "Outstanding" && outstandingOnly ? "border-brand ring-2 ring-brand/20" : "border-line"}`}
             >
               <span
                 className={`absolute inset-y-0 left-0 w-1 ${alert ? "bg-accent" : "bg-line"}`}
@@ -211,7 +228,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 {value}
               </p>
-            </div>
+              {label === "Outstanding" && (
+                <p className="mt-2 text-xs text-ink-muted">{outstandingOnly ? "Showing outstanding only · click to clear" : "Click to view unpaid bookings"}</p>
+              )}
+            </button>
           ))}
         </div>
 
@@ -224,6 +244,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </h2>
                 <p className="text-sm text-ink-muted mt-0.5">
                   {rows.length} booking{rows.length === 1 ? "" : "s"} shown
+                  {outstandingOnly && (
+                    <button type="button" onClick={() => setOutstandingOnly(false)} className="ml-3 text-brand font-semibold hover:underline">Clear outstanding filter</button>
+                  )}
                 </p>
               </div>
               {/* Segmented control: one bordered group reads as a single choice, where
@@ -296,7 +319,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <table className="min-w-[1280px] w-full">
               <thead className="bg-canvas border-b border-line">
                 <tr>
-                  {COLUMNS.map((column) => {
+                  {dashboardColumns.map((column) => {
                     const active = column.sortKey && sort.key === column.sortKey;
                     return (
                       <th
@@ -339,7 +362,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map((r) => {
-                  const s = STATUS_COLORS[r.docket.status];
                   return (
                     <tr
                       key={r.docket.id}
@@ -377,13 +399,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       >
                         {r.product.text}
                       </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md ring-1 ring-inset whitespace-nowrap ${s.bg} ${s.text} ${s.ring}`}
-                        >
-                          {r.docket.status}
-                        </span>
-                      </td>
                       <td className="px-4 py-3 text-sm font-medium text-ink whitespace-nowrap tabular text-right">
                         {formatCurrency(r.amount)}
                       </td>
@@ -392,6 +407,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       >
                         {formatCurrency(r.balance)}
                       </td>
+                      {canViewProfit && (
+                        <td className={`px-4 py-3 text-sm font-semibold whitespace-nowrap tabular text-right ${r.profit < 0 ? "text-red-600" : "text-ink"}`}>
+                          {formatCurrency(r.profit)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap">
                         {r.agent?.name || <span className="text-ink-subtle">Unassigned</span>}
                       </td>
@@ -406,9 +426,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </tr>
                   );
                 })}
+                {rows.length > 0 && (
+                  <tr className="bg-canvas border-t-2 border-line font-semibold">
+                    <td colSpan={6} className="px-4 py-3 text-sm text-ink">TOTAL ({rows.length} bookings)</td>
+                    <td className="px-4 py-3 text-sm text-ink tabular text-right whitespace-nowrap">{formatCurrency(totals.gross)}</td>
+                    <td className="px-4 py-3 text-sm text-accent-hover tabular text-right whitespace-nowrap">{formatCurrency(totals.outstanding)}</td>
+                    {canViewProfit && (
+                      <td className={`px-4 py-3 text-sm tabular text-right whitespace-nowrap ${totals.profit < 0 ? "text-red-600" : "text-ink"}`}>{formatCurrency(totals.profit)}</td>
+                    )}
+                    <td colSpan={2}></td>
+                  </tr>
+                )}
                 {!rows.length && (
                   <tr>
-                    <td colSpan={COLUMNS.length} className="p-0">
+                    <td colSpan={dashboardColumns.length} className="p-0">
                       <EmptyState
                         title="No bookings match these filters"
                         description="Try clearing the status, agent or travel-date filters, or search for a different traveller."
