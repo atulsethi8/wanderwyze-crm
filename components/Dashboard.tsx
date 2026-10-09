@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Agent, BookingStatus, Docket } from "../types";
+import { useAuth } from "../hooks";
 import { STATUS_COLORS } from "../constants";
 import { formatCurrency, formatDate } from "../services";
 import { calculateDocketTotals } from "../services/docketTotals";
@@ -22,8 +23,8 @@ interface DashboardProps {
 type ProductFilter = "All Bookings" | "Flights" | "Hotels" | "Packages";
 
 const money = (d: Docket) => {
-  const { grossBilled, balance } = calculateDocketTotals(d);
-  return { amount: grossBilled, balance };
+  const { grossBilled, balance, profit } = calculateDocketTotals(d);
+  return { amount: grossBilled, balance, profit };
 };
 const travelDate = (d: Docket) =>
   [
@@ -95,6 +96,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectDocket,
   searchTerm = "",
 }) => {
+  const { currentUser } = useAuth();
+  const canViewProfit = currentUser?.role === "admin";
+  const dashboardColumns = COLUMNS.filter((column) => canViewProfit || column.sortKey !== "profit");
   const [productFilter, setProductFilter] =
     useState<ProductFilter>("All Bookings");
   const [statusFilter, setStatusFilter] = useState("All"),
@@ -296,7 +300,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <table className="min-w-[1280px] w-full">
               <thead className="bg-canvas border-b border-line">
                 <tr>
-                  {COLUMNS.map((column) => {
+                  {dashboardColumns.map((column) => {
                     const active = column.sortKey && sort.key === column.sortKey;
                     return (
                       <th
@@ -392,6 +396,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       >
                         {formatCurrency(r.balance)}
                       </td>
+                      {canViewProfit && (
+                        <td className={`px-4 py-3 text-sm font-semibold whitespace-nowrap tabular text-right ${r.profit < 0 ? "text-red-600" : "text-ink"}`}>
+                          {formatCurrency(r.profit)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap">
                         {r.agent?.name || <span className="text-ink-subtle">Unassigned</span>}
                       </td>
@@ -408,7 +417,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 })}
                 {!rows.length && (
                   <tr>
-                    <td colSpan={COLUMNS.length} className="p-0">
+                    <td colSpan={dashboardColumns.length} className="p-0">
                       <EmptyState
                         title="No bookings match these filters"
                         description="Try clearing the status, agent or travel-date filters, or search for a different traveller."
