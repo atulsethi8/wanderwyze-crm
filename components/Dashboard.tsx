@@ -157,6 +157,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
       sort,
     ],
   );
+  // Operational metrics use the same current booking filters as financial totals.
+  const confirmedCount = useMemo(
+    () => rows.filter(row => row.docket.status === BookingStatus.Confirmed).length,
+    [rows],
+  );
+  const upcomingCount = useMemo(
+    () => rows.filter(row => {
+      const date = row.travelDate;
+      if (!date || row.docket.status === BookingStatus.Cancelled) return false;
+      const days = (new Date(`${date}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000;
+      return days >= 0 && days <= 30;
+    }).length,
+    [rows],
+  );
+
   // All dashboard totals come from the same filtered booking rows as the table.
   const totals = useMemo(
     () => rows.reduce(
@@ -181,9 +196,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Stat tiles. The accent bar gives the row a spine without adding colour noise. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {[
             ["Total bookings", rows.length.toString(), false],
+            ["Confirmed", confirmedCount.toString(), false],
+            ["Travel in 30 days", upcomingCount.toString(), false],
             ["Total Gross", formatCurrency(totals.gross), false],
             ...(canViewProfit ? [["Total Profit", formatCurrency(totals.profit), totals.profit < 0] as const] : []),
             ["Outstanding", formatCurrency(totals.outstanding), totals.outstanding > 0],
