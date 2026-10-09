@@ -98,6 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { currentUser } = useAuth();
   const canViewProfit = currentUser?.role === "admin";
   const dashboardColumns = COLUMNS.filter((column) => canViewProfit || column.sortKey !== "profit");
+  const [outstandingOnly, setOutstandingOnly] = useState(false);
   const [productFilter, setProductFilter] =
     useState<ProductFilter>("All Bookings");
   const [statusFilter, setStatusFilter] = useState("All"),
@@ -139,6 +140,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               row.product.type === productFilter) &&
             (statusFilter === "All" || row.docket.status === statusFilter) &&
             (agentFilter === "All" || row.docket.agentId === agentFilter) &&
+            (!outstandingOnly || row.balance > 0) &&
             (!travelFrom ||
               (!!row.travelDate && row.travelDate >= travelFrom)) &&
             (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
@@ -152,6 +154,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       productFilter,
       statusFilter,
       agentFilter,
+      outstandingOnly,
       travelFrom,
       travelTo,
       sort,
@@ -205,9 +208,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             ...(canViewProfit ? [["Total Profit", formatCurrency(totals.profit), totals.profit < 0] as const] : []),
             ["Outstanding", formatCurrency(totals.outstanding), totals.outstanding > 0],
           ].map(([label, value, alert]) => (
-            <div
+            <button
               key={label as string}
-              className="relative bg-surface border border-line rounded-xl px-5 py-4 shadow-card overflow-hidden"
+              type="button"
+              disabled={label !== "Outstanding"}
+              onClick={() => setOutstandingOnly(active => !active)}
+              aria-pressed={label === "Outstanding" ? outstandingOnly : undefined}
+              title={label === "Outstanding" ? "Click to show outstanding bookings; click again to show all" : undefined}
+              className={`relative text-left bg-surface border rounded-xl px-5 py-4 shadow-card overflow-hidden ${label === "Outstanding" ? "cursor-pointer hover:border-brand hover:shadow-md focus-visible:outline-2 focus-visible:outline-brand" : "cursor-default"} ${label === "Outstanding" && outstandingOnly ? "border-brand ring-2 ring-brand/20" : "border-line"}`}
             >
               <span
                 className={`absolute inset-y-0 left-0 w-1 ${alert ? "bg-accent" : "bg-line"}`}
@@ -220,7 +228,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 {value}
               </p>
-            </div>
+              {label === "Outstanding" && (
+                <p className="mt-2 text-xs text-ink-muted">{outstandingOnly ? "Showing outstanding only · click to clear" : "Click to view unpaid bookings"}</p>
+              )}
+            </button>
           ))}
         </div>
 
@@ -233,6 +244,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </h2>
                 <p className="text-sm text-ink-muted mt-0.5">
                   {rows.length} booking{rows.length === 1 ? "" : "s"} shown
+                  {outstandingOnly && (
+                    <button type="button" onClick={() => setOutstandingOnly(false)} className="ml-3 text-brand font-semibold hover:underline">Clear outstanding filter</button>
+                  )}
                 </p>
               </div>
               {/* Segmented control: one bordered group reads as a single choice, where
