@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Agent, BookingStatus, Docket } from "../types";
 import { useAuth } from "../hooks";
-import { STATUS_COLORS } from "../constants";
 import { formatCurrency, formatDate } from "../services";
 import { calculateDocketTotals } from "../services/docketTotals";
 import { EmptyState } from "./common";
@@ -158,22 +157,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
       sort,
     ],
   );
-  const outstanding = useMemo(
-    () => dockets.reduce((s, d) => s + Math.max(0, money(d).balance), 0),
-    [dockets],
-  );
-  const upcoming = useMemo(
-    () =>
-      dockets.filter((d) => {
-        const date = travelDate(d);
-        if (!date) return false;
-        const days =
-          (new Date(`${date}T00:00:00`).getTime() -
-            new Date().setHours(0, 0, 0, 0)) /
-          86400000;
-        return days >= 0 && days <= 30 && d.status !== BookingStatus.Cancelled;
-      }).length,
-    [dockets],
+  // All dashboard totals come from the same filtered booking rows as the table.
+  const totals = useMemo(
+    () => rows.reduce(
+      (sum, row) => ({
+        gross: sum.gross + row.amount,
+        profit: sum.profit + row.profit,
+        outstanding: sum.outstanding + Math.max(0, row.balance),
+      }),
+      { gross: 0, profit: 0, outstanding: 0 },
+    ),
+    [rows],
   );
 
   return (
@@ -189,16 +183,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Stat tiles. The accent bar gives the row a spine without adding colour noise. */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            ["Total bookings", dockets.length.toString(), false],
-            [
-              "Confirmed",
-              dockets
-                .filter((d) => d.status === BookingStatus.Confirmed)
-                .length.toString(),
-              false,
-            ],
-            ["Travel in 30 days", upcoming.toString(), false],
-            ["Outstanding", formatCurrency(outstanding), outstanding > 0],
+            ["Total bookings", rows.length.toString(), false],
+            ["Total Gross", formatCurrency(totals.gross), false],
+            ...(canViewProfit ? [["Total Profit", formatCurrency(totals.profit), totals.profit < 0] as const] : []),
+            ["Outstanding", formatCurrency(totals.outstanding), totals.outstanding > 0],
           ].map(([label, value, alert]) => (
             <div
               key={label as string}
@@ -343,7 +331,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map((r) => {
-                  const s = STATUS_COLORS[r.docket.status];
                   return (
                     <tr
                       key={r.docket.id}
@@ -381,13 +368,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       >
                         {r.product.text}
                       </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md ring-1 ring-inset whitespace-nowrap ${s.bg} ${s.text} ${s.ring}`}
-                        >
-                          {r.docket.status}
-                        </span>
-                      </td>
                       <td className="px-4 py-3 text-sm font-medium text-ink whitespace-nowrap tabular text-right">
                         {formatCurrency(r.amount)}
                       </td>
@@ -415,6 +395,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </tr>
                   );
                 })}
+                {rows.length > 0 && (
+                  <tr className="bg-canvas border-t-2 border-line font-semibold">
+                    <td colSpan={6} className="px-4 py-3 text-sm text-ink">TOTAL ({rows.length} bookings)</td>
+                    <td className="px-4 py-3 text-sm text-ink tabular text-right whitespace-nowrap">{formatCurrency(totals.gross)}</td>
+                    <td className="px-4 py-3 text-sm text-accent-hover tabular text-right whitespace-nowrap">{formatCurrency(totals.outstanding)}</td>
+                    {canViewProfit && (
+                      <td className={`px-4 py-3 text-sm tabular text-right whitespace-nowrap ${totals.profit < 0 ? "text-red-600" : "text-ink"}`}>{formatCurrency(totals.profit)}</td>
+                    )}
+                    <td colSpan={2}></td>
+                  </tr>
+                )}
                 {!rows.length && (
                   <tr>
                     <td colSpan={dashboardColumns.length} className="p-0">
