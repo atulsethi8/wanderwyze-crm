@@ -99,6 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const canViewProfit = currentUser?.role === "admin";
   const dashboardColumns = COLUMNS.filter((column) => canViewProfit || column.sortKey !== "profit");
   const [outstandingOnly, setOutstandingOnly] = useState(false);
+  const [travelNext30Only, setTravelNext30Only] = useState(false);
   const [productFilter, setProductFilter] =
     useState<ProductFilter>("All Bookings");
   const [statusFilter, setStatusFilter] = useState("All"),
@@ -107,6 +108,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     [travelTo, setTravelTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>(DEFAULT_SORT);
   const toggleSort = (key: SortKey) => setSort((current) => nextSort(current, key));
+
+  const isTravelWithin30Days = (date: string, status: BookingStatus): boolean => {
+    if (!date || status === BookingStatus.Cancelled) return false;
+    const days = (new Date(`${date}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000;
+    return days >= 0 && days <= 30;
+  };
 
   const rows = useMemo(
     () =>
@@ -141,6 +148,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             (statusFilter === "All" || row.docket.status === statusFilter) &&
             (agentFilter === "All" || row.docket.agentId === agentFilter) &&
             (!outstandingOnly || row.balance > 0) &&
+            (!travelNext30Only || isTravelWithin30Days(row.travelDate, row.docket.status)) &&
             (!travelFrom ||
               (!!row.travelDate && row.travelDate >= travelFrom)) &&
             (!travelTo || (!!row.travelDate && row.travelDate <= travelTo))
@@ -155,6 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       statusFilter,
       agentFilter,
       outstandingOnly,
+      travelNext30Only,
       travelFrom,
       travelTo,
       sort,
@@ -166,12 +175,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     [rows],
   );
   const upcomingCount = useMemo(
-    () => rows.filter(row => {
-      const date = row.travelDate;
-      if (!date || row.docket.status === BookingStatus.Cancelled) return false;
-      const days = (new Date(`${date}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000;
-      return days >= 0 && days <= 30;
-    }).length,
+    () => rows.filter(row => isTravelWithin30Days(row.travelDate, row.docket.status)).length,
     [rows],
   );
 
@@ -211,11 +215,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               key={label as string}
               type="button"
-              disabled={label !== "Outstanding"}
-              onClick={() => setOutstandingOnly(active => !active)}
-              aria-pressed={label === "Outstanding" ? outstandingOnly : undefined}
-              title={label === "Outstanding" ? "Click to show outstanding bookings; click again to show all" : undefined}
-              className={`relative text-left bg-surface border rounded-xl px-5 py-4 shadow-card overflow-hidden ${label === "Outstanding" ? "cursor-pointer hover:border-brand hover:shadow-md focus-visible:outline-2 focus-visible:outline-brand" : "cursor-default"} ${label === "Outstanding" && outstandingOnly ? "border-brand ring-2 ring-brand/20" : "border-line"}`}
+              disabled={label !== "Outstanding" && label !== "Travel in 30 days"}
+              onClick={() => {
+                if (label === "Outstanding") setOutstandingOnly(active => !active);
+                if (label === "Travel in 30 days") setTravelNext30Only(active => !active);
+              }}
+              aria-pressed={label === "Outstanding" ? outstandingOnly : label === "Travel in 30 days" ? travelNext30Only : undefined}
+              title={label === "Outstanding" ? "Click to show outstanding bookings; click again to show all" : label === "Travel in 30 days" ? "Click to filter upcoming trips; click again to clear" : undefined}
+              className={`relative text-left bg-surface border rounded-xl px-5 py-4 shadow-card overflow-hidden ${label === "Outstanding" || label === "Travel in 30 days" ? "cursor-pointer hover:border-brand hover:shadow-md focus-visible:outline-2 focus-visible:outline-brand" : "cursor-default"} ${(label === "Outstanding" && outstandingOnly) || (label === "Travel in 30 days" && travelNext30Only) ? "border-brand ring-2 ring-brand/20" : "border-line"}`}
             >
               <span
                 className={`absolute inset-y-0 left-0 w-1 ${alert ? "bg-accent" : "bg-line"}`}
@@ -230,6 +237,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
               {label === "Outstanding" && (
                 <p className="mt-2 text-xs text-ink-muted">{outstandingOnly ? "Showing outstanding only · click to clear" : "Click to view unpaid bookings"}</p>
+              )}
+              {label === "Travel in 30 days" && (
+                <p className="mt-2 text-xs text-ink-muted">{travelNext30Only ? "Showing upcoming trips · click to clear" : "Click to view upcoming trips"}</p>
               )}
             </button>
           ))}
@@ -246,6 +256,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {rows.length} booking{rows.length === 1 ? "" : "s"} shown
                   {outstandingOnly && (
                     <button type="button" onClick={() => setOutstandingOnly(false)} className="ml-3 text-brand font-semibold hover:underline">Clear outstanding filter</button>
+                  )}
+                  {travelNext30Only && (
+                    <button type="button" onClick={() => setTravelNext30Only(false)} className="ml-3 text-brand font-semibold hover:underline">Clear 30-day filter</button>
                   )}
                 </p>
               </div>
