@@ -55,7 +55,6 @@ export const COLUMNS: {
   { label: 'Travel Date', sortKey: 'travelDate', defaultDirection: 'desc' },
   { label: 'Booking Date', sortKey: 'bookingDate', defaultDirection: 'desc' },
   { label: 'Product / Trip Details', sortKey: 'product' },
-  { label: 'Status', sortKey: 'status' },
   { label: 'Amount', sortKey: 'amount', defaultDirection: 'desc' },
   { label: 'Balance', sortKey: 'balance', defaultDirection: 'desc' },
   { label: 'Profit', sortKey: 'profit', defaultDirection: 'desc' },
