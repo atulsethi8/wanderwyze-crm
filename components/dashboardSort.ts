@@ -17,6 +17,7 @@ export type SortKey =
   | 'status'
   | 'amount'
   | 'balance'
+  | 'profit'
   | 'agent';
 
 export type SortDirection = 'asc' | 'desc';
@@ -31,6 +32,7 @@ export interface Row {
   product: ProductSummary;
   amount: number;
   balance: number;
+  profit: number;
   bookingRef: string;
   leadTraveller: string;
   travelDate: string;
@@ -53,9 +55,9 @@ export const COLUMNS: {
   { label: 'Travel Date', sortKey: 'travelDate', defaultDirection: 'desc' },
   { label: 'Booking Date', sortKey: 'bookingDate', defaultDirection: 'desc' },
   { label: 'Product / Trip Details', sortKey: 'product' },
-  { label: 'Status', sortKey: 'status' },
   { label: 'Amount', sortKey: 'amount', defaultDirection: 'desc' },
   { label: 'Balance', sortKey: 'balance', defaultDirection: 'desc' },
+  { label: 'Profit', sortKey: 'profit', defaultDirection: 'desc' },
   { label: 'Agent', sortKey: 'agent' },
   { label: 'Actions' },
 ];
@@ -87,6 +89,8 @@ const sortValue = (row: Row, key: SortKey): string | number => {
       return row.amount;
     case 'balance':
       return row.balance;
+    case 'profit':
+      return row.profit;
     case 'agent':
       return row.agent?.name || '';
   }
