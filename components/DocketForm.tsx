@@ -1763,7 +1763,7 @@ export const DocketForm: React.FC<DocketFormProps> = ({
                           <button
                             type="button"
                             key={client.name.toLocaleLowerCase()}
-                            onMouseDown={(event) => {
+                            onPointerDown={(event) => {
                               event.preventDefault();
                               selectKnownClient(client);
                             }}
