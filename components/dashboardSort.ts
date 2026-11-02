@@ -51,7 +51,7 @@ export const COLUMNS: {
 }[] = [
   { label: 'Docket No.', sortKey: 'docketNo', defaultDirection: 'desc' },
   { label: 'PNR / Booking Ref', sortKey: 'bookingRef' },
-  { label: 'Lead Traveller', sortKey: 'leadTraveller' },
+  { label: 'Client Name', sortKey: 'leadTraveller' },
   { label: 'Travel Date', sortKey: 'travelDate', defaultDirection: 'desc' },
   { label: 'Booking Date', sortKey: 'bookingDate', defaultDirection: 'desc' },
   { label: 'Product / Trip Details', sortKey: 'product' },
