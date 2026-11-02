@@ -118,6 +118,7 @@ const syncLegacyFlightFields = (
 };
 
 interface DocketFormProps {
+  existingDockets: Docket[];
   docket: Docket | null;
   onSave: (
     docketData: Omit<Docket, "id" | "searchTags" | "createdAt" | "updatedAt">,
@@ -357,6 +358,7 @@ const AddPaxToFlightModalContent: React.FC<{
 
 // --- MAIN DOCKET FORM COMPONENT ---
 export const DocketForm: React.FC<DocketFormProps> = ({
+  existingDockets,
   docket,
   onSave,
   onDelete,
@@ -373,6 +375,33 @@ export const DocketForm: React.FC<DocketFormProps> = ({
     Omit<Docket, "id" | "searchTags" | "createdAt" | "updatedAt">
   >(INITIAL_DOCKET_FORM_STATE);
   const [activeTab, setActiveTab] = useState("details");
+  const [clientSuggestionsOpen, setClientSuggestionsOpen] = useState(false);
+  const knownClients = useMemo(() => {
+    const unique = new Map<string, { name: string; contactInfo: string }>();
+    // Most recently updated matching contact wins.
+    [...existingDockets].sort((a, b) =>
+      (a.updatedAt || a.createdAt || "").localeCompare(b.updatedAt || b.createdAt || "")
+    ).forEach((entry) => {
+      const name = entry.client?.name?.trim();
+      if (name) unique.set(name.toLocaleLowerCase(), {
+        name,
+        contactInfo: entry.client?.contactInfo || "",
+      });
+    });
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [existingDockets]);
+  const matchingClients = useMemo(() => {
+    const query = formState.client.name.trim().toLocaleLowerCase();
+    if (!query) return [];
+    return knownClients.filter((client) => client.name.toLocaleLowerCase().includes(query)).slice(0, 8);
+  }, [knownClients, formState.client.name]);
+  const selectKnownClient = (client: { name: string; contactInfo: string }) => {
+    setFormState((previous) => ({
+      ...previous,
+      client: { ...previous.client, name: client.name, contactInfo: client.contactInfo },
+    }));
+    setClientSuggestionsOpen(false);
+  };
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
@@ -1715,12 +1744,40 @@ export const DocketForm: React.FC<DocketFormProps> = ({
             {activeTab === "details" && (
               <Section title="Client Details" icon={Icons.user}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormInput
-                    label="Client Name"
-                    value={formState.client.name}
-                    onChange={(e) => handleClientChange("name", e.target.value)}
-                    disabled={isReadOnly}
-                  />
+                  <div className="relative">
+                    <FormInput
+                      label="Client Name"
+                      value={formState.client.name}
+                      onChange={(e) => {
+                        handleClientChange("name", e.target.value);
+                        setClientSuggestionsOpen(true);
+                      }}
+                      onFocus={() => setClientSuggestionsOpen(true)}
+                      onBlur={() => setClientSuggestionsOpen(false)}
+                      autoComplete="off"
+                      disabled={isReadOnly}
+                    />
+                    {!isReadOnly && clientSuggestionsOpen && matchingClients.length > 0 && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg" role="listbox" aria-label="Previously used clients">
+                        {matchingClients.map((client) => (
+                          <button
+                            type="button"
+                            key={client.name.toLocaleLowerCase()}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              selectKnownClient(client);
+                            }}
+                            className="block w-full px-3 py-2 text-left hover:bg-slate-100 focus:bg-slate-100"
+                            role="option"
+                            aria-selected={false}
+                          >
+                            <span className="block text-sm font-medium text-slate-900">{client.name}</span>
+                            {client.contactInfo && <span className="block text-xs text-slate-500">{client.contactInfo}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <FormInput
                     label="Contact Info (Email/Phone)"
                     value={formState.client.contactInfo}
