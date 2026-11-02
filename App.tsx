@@ -163,6 +163,7 @@ const AppContent: React.FC = () => {
                 return <Dashboard dockets={dockets} agents={agents} onSelectDocket={handleSelectDocket} searchTerm={searchTerm} />;
             case 'form':
                 return <DocketForm 
+                    existingDockets={dockets}
                     docket={selectedDocket} 
                     onSave={handleSaveDocket}
                     onDelete={handleDeleteDocket}
