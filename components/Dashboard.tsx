@@ -123,7 +123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           product: product(docket),
           ...money(docket),
           bookingRef: bookingRef(docket),
-          leadTraveller: docket.passengers[0]?.fullName || docket.client.name,
+          leadTraveller: docket.client.name?.trim() || "—",
           travelDate: travelDate(docket),
           agent: agents.find((a) => a.id === docket.agentId),
         }))
@@ -137,6 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               row.bookingRef,
               row.leadTraveller,
               row.docket.client.name,
+              ...row.docket.passengers.map((passenger) => passenger.fullName),
               row.product.text,
               row.agent?.name,
             ].some((v) => v?.toLowerCase().includes(q)) ||
@@ -391,12 +392,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <p className="font-medium text-ink">
                           {r.leadTraveller}
                         </p>
-                        {r.docket.passengers.length > 1 && (
-                          <p className="text-xs text-ink-subtle mt-0.5">
-                            +{r.docket.passengers.length - 1} traveller
-                            {r.docket.passengers.length > 2 ? "s" : ""}
-                          </p>
-                        )}
+                        
                       </td>
                       <td className="px-4 py-3 text-sm text-ink-muted whitespace-nowrap tabular">
                         {r.travelDate ? formatDate(r.travelDate) : "—"}
